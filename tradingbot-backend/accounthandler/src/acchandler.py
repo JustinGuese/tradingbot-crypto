@@ -4,7 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi_login import LoginManager
 from fastapi_login.exceptions import InvalidCredentialsException
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from pydantic import BaseModel
 from typing import Optional, List
 from os import environ
@@ -41,8 +41,9 @@ class Account(BaseModel):
 DEFAULTACCOUNTVALUE = 10000 # 10 000 usd
 
 # SECURITY STUFF
-manager = LoginManager(environ["SECRET"], token_url='/auth/token')
+manager = LoginManager(environ["SECRET"], '/login') # , use_cookie=True
 @manager.user_loader()
+
 def load_user(name: str):  # could also be an asynchronous function
     res = db.search(Queryobject.name == name)
     if len(res) == 0:
@@ -51,21 +52,24 @@ def load_user(name: str):  # could also be an asynchronous function
         return Account(**res[0])
 
 ## login related stuff
-@app.post('/auth/token')
+@app.post('/login')
 def login(data: OAuth2PasswordRequestForm = Depends()):
     name = data.username
     password = data.password
     user = load_user(name)
     
     if not user:
+        print("user not found")
         raise InvalidCredentialsException  # you can also use your own HTTPException
-    elif __passwdHash(password) != user.hashedPw:
+    elif not check_password_hash(user.hashedPw, password):
+        print("wrong password", __passwdHash(password)[-8:], user.hashedPw[-8:], password, __passwdHash(password)[-8:])
         raise InvalidCredentialsException
-    
-    access_token = manager.create_access_token(
-        data=dict(sub=name)
-    )
-    return {'access_token': access_token, 'token_type': 'bearer'}
+    else:
+        access_token = manager.create_access_token(
+            data=dict(sub=name), expires=timedelta(hours=12)
+        )
+        # manager.set_cookie(data, access_token)
+        return {'access_token': access_token, 'token_type': 'bearer'}
 
 @app.get('/protected')
 def protected_route(t = Depends(manager)):
@@ -114,6 +118,9 @@ async def getAllAccounts():
         acc["hashedPw"] = "****"
         resp.append(acc)
     return resp
+
+# @app.post("/buyStock", response_model = PortfolioItem)
+# async def buyStock()
     
 def __getStringNow():
     return __codeTimestamp(datetime.utcnow())
