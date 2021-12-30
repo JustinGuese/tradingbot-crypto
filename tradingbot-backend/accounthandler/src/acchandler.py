@@ -61,7 +61,8 @@ def login(data: OAuth2PasswordRequestForm = Depends()):
         print("user not found")
         raise InvalidCredentialsException  # you can also use your own HTTPException
     elif not check_password_hash(user.hashedPw, password):
-        print("wrong password", __passwdHash(password)[-8:], user.hashedPw[-8:], password, __passwdHash(password)[-8:])
+        print("wrong password")
+        # print("wrong password", __passwdHash(password)[-8:], user.hashedPw[-8:], password, __passwdHash(password)[-8:])
         raise InvalidCredentialsException
     else:
         access_token = manager.create_access_token(
@@ -123,14 +124,19 @@ async def getAllAccounts():
         resp.append(acc)
     return resp
 
+AMOUNTTYPES = ["amount", "currency"]
 @app.post("/buyStock", response_model = dict)
-async def buyStock(stockname : str, amount : float, current_user = Depends(manager)):
+async def buyStock(stockname : str, amount : float, amountType : str = "amount", current_user = Depends(manager)):
+    if amountType not in AMOUNTTYPES:
+        raise HTTPException(status_code=400, detail="amountType must be one of: " + str(AMOUNTTYPES) + " . amount means nr of stock, currency to buy for tha tmuch currency")
+    
     stockname = stockNameCheck(stockname)
     # first check if we have enough cash
     portfolio = await getPortfolio(current_user.name)
-    print("current portfolio", portfolio)
+    # print("current portfolio", portfolio)
     cash = portfolio["USDT"]
     currentPrice = __getCurrentPrice(stockname)
+    # print("amount, currentPrice, cash ", amount, currentPrice, cash)
     cost = amount * currentPrice * (1 + COMMISSION)
     
     if cost >= cash:
@@ -142,8 +148,37 @@ async def buyStock(stockname : str, amount : float, current_user = Depends(manag
             # if we have some already
             portfolio[stockname] += amount
         portfolio["USDT"] = cash - cost
-        db.update({"portfolio": portfolio}, Queryobject.name == manager.current_user.name)
+        db.update({"portfolio": portfolio}, Queryobject.name == current_user.name)
         return portfolio
+
+@app.post("/sellStock", response_model = dict)
+async def buyStock(stockname : str, amount : float = -1.,current_user = Depends(manager)):
+    
+    stockname = stockNameCheck(stockname)
+    if amount < -1:
+        raise HTTPException(status_code=400, detail="Invalid amount. has to be a positive number or empty for all")
+    # first check if we have enough of that stock
+    portfolio = await getPortfolio(current_user.name)
+    # print("current portfolio", portfolio)
+    holdingNr = portfolio.get(stockname)
+    if amount == -1:
+        amount = holdingNr # sell all mode
+    
+    if holdingNr is None:
+        raise HTTPException(status_code=404, detail="Account does not have that stock")
+    elif holdingNr < amount:
+        raise HTTPException(status_code=400, detail="You do not own %.2f of %s. you own: %.2f" % (amount, stockname, holdingNr))
+    
+    currentPrice = __getCurrentPrice(stockname)
+    
+    win = amount * currentPrice * (1 - COMMISSION)
+    portfolio[stockname] = holdingNr - amount
+    if portfolio[stockname] == 0:
+        del portfolio[stockname]
+    portfolio["USDT"] = portfolio["USDT"] + win
+    db.update({"portfolio": portfolio}, Queryobject.name == current_user.name)
+    
+    return portfolio
     
 def __getStringNow():
     return __codeTimestamp(datetime.utcnow())
@@ -157,10 +192,10 @@ def __decodeTimestamp(timestamp):
 def __getBinancePrice(symbol):
     try:
         price = float(client.get_avg_price(symbol=symbol)["price"])
+        return price
     except BinanceAPIException as e:
         print("BinanceAPIException for symbol: " + str(symbol))
         raise e
-    return 
 
 def __getCurrentPrice(symbol):
     # symbol has to be like BTCUSDT
@@ -186,7 +221,8 @@ def __getCurrentPrice(symbol):
         price = __getBinancePrice(symbol)
         js = {'symbol': symbol, 'price': price, 'timestamp': __getStringNow()}
         lastPrices.insert(js)
-    if price != 0.:
+    
+    if price != 0. and price is not None:
         # last check
         return price
     else:
