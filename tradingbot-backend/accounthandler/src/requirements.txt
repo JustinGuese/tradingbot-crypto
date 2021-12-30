@@ -1,4 +1,6 @@
 python-binance
 tinydb
 fastapi
+fastapi-login
 python-dotenv
+python-multipart

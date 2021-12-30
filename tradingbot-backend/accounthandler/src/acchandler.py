@@ -1,6 +1,10 @@
 from tinydb import TinyDB, Query
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi_login import LoginManager
+from fastapi_login.exceptions import InvalidCredentialsException
+from werkzeug.security import generate_password_hash
 from pydantic import BaseModel
 from typing import Optional, List
 from os import environ
@@ -9,6 +13,7 @@ from datetime import datetime, timedelta
 from binance import Client
 from binance.exceptions import BinanceAPIException
 from json import loads
+import uvicorn
 
 load_dotenv()  # take environment variables from .env.
 
@@ -27,19 +32,57 @@ class PortfolioItem(BaseModel):
     amount: Optional[float] = 10000
 class Account(BaseModel):
     name: str
+    hashedPw: str
     description: Optional[str] = "A default bot"
     portfolio: List[PortfolioItem] = [PortfolioItem(symbol = "USDT", amount = 10000)]
-    
+    demo: Optional[bool] = True
+    disabled: Optional[bool] = False
 
 DEFAULTACCOUNTVALUE = 10000 # 10 000 usd
 
-@app.post("/accounts", response_model=Account)
+# SECURITY STUFF
+manager = LoginManager(environ["SECRET"], token_url='/auth/token')
+@manager.user_loader()
+def load_user(name: str):  # could also be an asynchronous function
+    res = db.search(Queryobject.name == name)
+    if len(res) == 0:
+        return None
+    else:
+        return Account(**res[0])
+
+## login related stuff
+@app.post('/auth/token')
+def login(data: OAuth2PasswordRequestForm = Depends()):
+    name = data.username
+    password = data.password
+    user = load_user(name)
+    
+    if not user:
+        raise InvalidCredentialsException  # you can also use your own HTTPException
+    elif __passwdHash(password) != user.hashedPw:
+        raise InvalidCredentialsException
+    
+    access_token = manager.create_access_token(
+        data=dict(sub=name)
+    )
+    return {'access_token': access_token, 'token_type': 'bearer'}
+
+@app.get('/protected')
+def protected_route(t = Depends(manager)):
+    return {"message": "you are logged in!"}
+## end login related stuff
+
+def __passwdHash(passwd):
+    return generate_password_hash(passwd, method='pbkdf2:sha512')
+
+@app.post("/createNewAccount", response_model=Account)
 async def createNewAccount(account: Account):
     # check if exists already
     res = db.search(Queryobject.name == account.name)
     if len(res) > 0:
         raise HTTPException(status_code=400, detail="Account already exists")
     else:
+        account.hashedPw = __passwdHash(account.hashedPw)
         db.insert(jsonable_encoder(account))
         return account
     
@@ -65,7 +108,12 @@ async def getPortfolioWorth(accountName: str):
     
 @app.get("/getAllAccounts", response_model = List[Account])
 async def getAllAccounts():
-    return db.all()
+    # return db.all()
+    resp = []
+    for acc in db.all():
+        acc["hashedPw"] = "****"
+        resp.append(acc)
+    return resp
     
 def __getStringNow():
     return __codeTimestamp(datetime.utcnow())
@@ -117,3 +165,7 @@ def __getCurrentPrice(symbol):
 @app.get("/currentPrice", response_model = float)
 async def getCurrentPrice(symbol: str):
     return __getCurrentPrice(symbol)
+
+
+if __name__ == "__main__":
+    uvicorn.run("acchandler:app", host="127.0.0.1", log_level="debug")
