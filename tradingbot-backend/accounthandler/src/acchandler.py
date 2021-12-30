@@ -26,15 +26,14 @@ Queryobject = Query()
 
 PRICEQUERYCACHE = 3 # minutes
 
+COMMISSION = 0.000025 # pct binance
+
 #fastapi models
-class PortfolioItem(BaseModel):
-    symbol: str = "USDT"
-    amount: Optional[float] = 10000
 class Account(BaseModel):
     name: str
     hashedPw: str
     description: Optional[str] = "A default bot"
-    portfolio: List[PortfolioItem] = [PortfolioItem(symbol = "USDT", amount = 10000)]
+    portfolio: Optional[dict] = {"USDT":  10000}
     demo: Optional[bool] = True
     disabled: Optional[bool] = False
 
@@ -79,6 +78,11 @@ def protected_route(t = Depends(manager)):
 def __passwdHash(passwd):
     return generate_password_hash(passwd, method='pbkdf2:sha512')
 
+def stockNameCheck(stock):
+    if "USDT" not in stock:
+        stock += "USDT"
+    return stock
+
 @app.post("/createNewAccount", response_model=Account)
 async def createNewAccount(account: Account):
     # check if exists already
@@ -90,7 +94,7 @@ async def createNewAccount(account: Account):
         db.insert(jsonable_encoder(account))
         return account
     
-@app.get("/getPortfolio", response_model = List[PortfolioItem])
+@app.get("/getPortfolio", response_model = dict)
 async def getPortfolio(accountName: str):
     res = db.search(Queryobject.name == accountName)
     if len(res) == 0:
@@ -119,8 +123,27 @@ async def getAllAccounts():
         resp.append(acc)
     return resp
 
-# @app.post("/buyStock", response_model = PortfolioItem)
-# async def buyStock()
+@app.post("/buyStock", response_model = dict)
+async def buyStock(stockname : str, amount : float, current_user = Depends(manager)):
+    stockname = stockNameCheck(stockname)
+    # first check if we have enough cash
+    portfolio = await getPortfolio(current_user.name)
+    print("current portfolio", portfolio)
+    cash = portfolio["USDT"]
+    currentPrice = __getCurrentPrice(stockname)
+    cost = amount * currentPrice * (1 + COMMISSION)
+    
+    if cost >= cash:
+        raise HTTPException(status_code=400, detail="Not enough cash. cost: %.2f$, cash: %.2f$" % (cost, cash))
+    else:
+        if stockname not in portfolio:
+            portfolio[stockname] = amount
+        else:
+            # if we have some already
+            portfolio[stockname] += amount
+        portfolio["USDT"] = cash - cost
+        db.update({"portfolio": portfolio}, Queryobject.name == manager.current_user.name)
+        return portfolio
     
 def __getStringNow():
     return __codeTimestamp(datetime.utcnow())
@@ -143,9 +166,9 @@ def __getCurrentPrice(symbol):
     # symbol has to be like BTCUSDT
     # try to save querying the api with lookup
     # handle non direct lookups
-    if "USDT" not in symbol:
-        symbol += "USDT"
-    elif symbol == "USDT":
+    symbol = stockNameCheck(symbol)
+    
+    if symbol == "USDT":
         # simplest case
         return 1.
     
