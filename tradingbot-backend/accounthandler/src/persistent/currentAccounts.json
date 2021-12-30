@@ -1,0 +1,1 @@
+{"_default": {"1": {"name": "testibot", "description": "A default bot", "portfolio": {"symbol": "USDT", "amount": 10000.0}}, "2": {"name": "ottobot", "description": "A default bot", "portfolio": {"symbol": "USDT", "amount": 10000.0}}}}

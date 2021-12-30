@@ -1,0 +1,20 @@
+version: "3"
+services:
+  # tradingbot-psql:
+  #   image: postgres:alpine
+  #   container_name: tradingbot-psql
+  #   environment:
+  #     - POSTGRES_USER=tradingbot
+  #     - POSTGRES_PASSWORD=tradingbot
+  #     - POSTGRES_DB=tradingbot
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - tradingbotpsqldata:/var/lib/postgresql/data
+
+  # tradingbot-acchandler:
+  #   image: guestros/tradingbot-accounthandler:latest
+  #   build: ./accounthandler/
+
+volumes:
+  tradingbotpsqldata:

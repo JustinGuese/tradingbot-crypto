@@ -1,0 +1,4 @@
+python-binance
+tinydb
+fastapi
+python-dotenv
