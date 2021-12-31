@@ -1,6 +1,9 @@
 python-binance
-tinydb
+# tinydb
+pymongo
 fastapi
 fastapi-login
 python-dotenv
 python-multipart
+werkzeug
+uvicorn

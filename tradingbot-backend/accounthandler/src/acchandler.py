@@ -234,4 +234,4 @@ async def getCurrentPrice(symbol: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("acchandler:app", host="127.0.0.1", log_level="debug")
+    uvicorn.run("acchandler:app", host="0.0.0.0", log_level="debug")

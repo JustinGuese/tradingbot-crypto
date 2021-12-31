@@ -1,20 +1,19 @@
 version: "3"
 services:
-  # tradingbot-psql:
-  #   image: postgres:alpine
-  #   container_name: tradingbot-psql
-  #   environment:
-  #     - POSTGRES_USER=tradingbot
-  #     - POSTGRES_PASSWORD=tradingbot
-  #     - POSTGRES_DB=tradingbot
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - tradingbotpsqldata:/var/lib/postgresql/data
 
-  # tradingbot-acchandler:
-  #   image: guestros/tradingbot-accounthandler:latest
-  #   build: ./accounthandler/
+  tradingbot-acchandler:
+    image: guestros/tradingbot-accounthandler:latest
+    build: ./accounthandler/
+    ports:
+      - "8000:8000"
+    volumes:
+      - tradingbot-acchandler:/app/persistent/
+    env_file:
+      - .env
+    # environment:
+    #   - BINANCE_KEY=2222
+    #   - BINANCE_SECRET=2222
+    #   - SECRET=222
 
 volumes:
-  tradingbotpsqldata:
+  tradingbot-acchandler:
