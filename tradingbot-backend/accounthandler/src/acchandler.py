@@ -23,6 +23,8 @@ mongoclient = MongoClient("mongodb://%s:27017" % environ["MONGODB_HOST"])
 tradingdb = mongoclient.tradingdb
 lastPricesCol = tradingdb.lastPrices
 accountsCol = tradingdb.accounts
+tradesCol = tradingdb.trades
+errorsCol = tradingdb.errors
 
 app = FastAPI()
 
@@ -51,6 +53,20 @@ def load_user(name: str):  # could also be an asynchronous function
         return None
     else:
         return Account(**res)
+    
+def logTrade(stock, amount, price, direction, account):
+    if direction not in ["buy", "sell"]:
+        raise HTTPException(status_code=400, detail="Invalid direction. has to be buy or sell")
+    trade = {
+        "stockname" : stock,
+        "amount" : amount,
+        "price" : round(price,2),
+        "volume" : round(amount * price, 2),
+        "direction" : direction,
+        "account" : account,
+        "timestamp" : __getStringNow()
+    }
+    tradesCol.insert_one(trade)
 
 ## login related stuff
 @app.post('/login')
@@ -153,6 +169,7 @@ async def buyStock(stockname : str, amount : float, amountType : str = "amount",
             portfolio[stockname] += amount
         portfolio["USDT"] = cash - cost
         accountsCol.update_one({"name": current_user.name}, {"$set": {"portfolio": portfolio}})
+        logTrade(stockname, amount, currentPrice, "buy", current_user.name)
         return portfolio
 
 @app.post("/sellStock", response_model = dict)
@@ -181,6 +198,7 @@ async def buyStock(stockname : str, amount : float = -1.,current_user = Depends(
         del portfolio[stockname]
     portfolio["USDT"] = portfolio["USDT"] + win
     accountsCol.update_one({"name": current_user.name}, {"$set": {"portfolio": portfolio}})
+    logTrade(stockname, amount, currentPrice, "sell", current_user.name)
     
     return portfolio
     
