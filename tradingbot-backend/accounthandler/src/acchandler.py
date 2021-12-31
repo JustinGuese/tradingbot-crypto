@@ -1,4 +1,4 @@
-from tinydb import TinyDB, Query
+from pymongo import MongoClient
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -19,10 +19,13 @@ load_dotenv()  # take environment variables from .env.
 
 client = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
 
-db = TinyDB('persistent/currentAccounts.json')
-lastPrices = TinyDB('persistent/lastPrices.json')
+mongoclient = MongoClient("mongodb://%s:27017" % environ["MONGODB_HOST"])
+tradingdb = mongoclient.tradingdb
+lastPricesCol = tradingdb.lastPrices
+accountsCol = tradingdb.accounts
+
 app = FastAPI()
-Queryobject = Query()
+
 
 PRICEQUERYCACHE = 3 # minutes
 
@@ -42,13 +45,12 @@ DEFAULTACCOUNTVALUE = 10000 # 10 000 usd
 # SECURITY STUFF
 manager = LoginManager(environ["SECRET"], '/login') # , use_cookie=True
 @manager.user_loader()
-
 def load_user(name: str):  # could also be an asynchronous function
-    res = db.search(Queryobject.name == name)
-    if len(res) == 0:
+    res = accountsCol.find_one({"name": name})
+    if res is None:
         return None
     else:
-        return Account(**res[0])
+        return Account(**res)
 
 ## login related stuff
 @app.post('/login')
@@ -87,29 +89,30 @@ def stockNameCheck(stock):
 @app.post("/createNewAccount", response_model=Account)
 async def createNewAccount(account: Account):
     # check if exists already
-    res = db.search(Queryobject.name == account.name)
-    if len(res) > 0:
+    res = accountsCol.find_one({"name": account.name})
+    if not res is None:
         raise HTTPException(status_code=400, detail="Account already exists")
     else:
         account.hashedPw = __passwdHash(account.hashedPw)
-        db.insert(jsonable_encoder(account))
+        accountsCol.insert_one(jsonable_encoder(account))
         return account
     
 @app.get("/getPortfolio", response_model = dict)
 async def getPortfolio(accountName: str):
-    res = db.search(Queryobject.name == accountName)
-    if len(res) == 0:
+    res = accountsCol.find_one({"name": accountName})
+    if res is None:
         raise HTTPException(status_code=404, detail="Account does not exists")
     else:
-        return res[0]["portfolio"]
+        return res["portfolio"]
     
 @app.get("/getPortfolioWorth", response_model = float)
 async def getPortfolioWorth(accountName: str):
-    res = db.search(Queryobject.name == accountName)
-    if len(res) == 0:
+    res = accountsCol.find_one({"name": accountName})
+    if res is None:
         raise HTTPException(status_code=404, detail="Account does not exists")
     else:
-        portfolio = res[0]["portfolio"]
+        portfolio = res["portfolio"]
+        print("portfolio", portfolio)
         total = 0.
         for item in portfolio:
             total += float(item["amount"]) * __getCurrentPrice(item["symbol"])
@@ -119,7 +122,8 @@ async def getPortfolioWorth(accountName: str):
 async def getAllAccounts():
     # return db.all()
     resp = []
-    for acc in db.all():
+    cursor = accountsCol.find({})
+    for acc in cursor:
         acc["hashedPw"] = "****"
         resp.append(acc)
     return resp
@@ -148,7 +152,7 @@ async def buyStock(stockname : str, amount : float, amountType : str = "amount",
             # if we have some already
             portfolio[stockname] += amount
         portfolio["USDT"] = cash - cost
-        db.update({"portfolio": portfolio}, Queryobject.name == current_user.name)
+        accountsCol.update_one({"name": current_user.name}, {"$set": {"portfolio": portfolio}})
         return portfolio
 
 @app.post("/sellStock", response_model = dict)
@@ -176,7 +180,7 @@ async def buyStock(stockname : str, amount : float = -1.,current_user = Depends(
     if portfolio[stockname] == 0:
         del portfolio[stockname]
     portfolio["USDT"] = portfolio["USDT"] + win
-    db.update({"portfolio": portfolio}, Queryobject.name == current_user.name)
+    accountsCol.update_one({"name": current_user.name}, {"$set": {"portfolio": portfolio}})
     
     return portfolio
     
@@ -207,20 +211,20 @@ def __getCurrentPrice(symbol):
         # simplest case
         return 1.
     
-    res = db.search(Queryobject.symbol == symbol)
+    res = lastPricesCol.find_one({"symbol": symbol})
     price = 0.
-    if len(res) > 0:
+    if res is not None:
         # if it is there check the timestamp
-        if __decodeTimestamp(res[0]["timestamp"]) + timedelta(minutes=PRICEQUERYCACHE) > datetime.utcnow():
-            price = float(res[0]["price"])
+        if __decodeTimestamp(res["timestamp"]) + timedelta(minutes=PRICEQUERYCACHE) > datetime.utcnow():
+            price = float(res["price"])
         else: # we have to update current price
             price = __getBinancePrice(symbol)
             upd = {'price': price, 'timestamp': __getStringNow()}
-            lastPrices.update(upd, Queryobject.symbol == symbol)
+            lastPricesCol.update_one({"symbol": symbol}, {"$set": upd})
     else: # we have to create the entry
         price = __getBinancePrice(symbol)
         js = {'symbol': symbol, 'price': price, 'timestamp': __getStringNow()}
-        lastPrices.insert(js)
+        lastPricesCol.insert_one(js)
     
     if price != 0. and price is not None:
         # last check
