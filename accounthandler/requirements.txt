@@ -1,0 +1,6 @@
+fastapi
+pymongo
+uvicorn[standard]
+python-binance
+python-dotenv
+pandas

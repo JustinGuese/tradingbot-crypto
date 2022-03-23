@@ -2,9 +2,7 @@ from pymongo import MongoClient
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi_login import LoginManager
-from fastapi_login.exceptions import InvalidCredentialsException
-from werkzeug.security import generate_password_hash, check_password_hash
+
 from pydantic import BaseModel
 from typing import Optional, List
 from os import environ
@@ -44,63 +42,6 @@ class Account(BaseModel):
 
 DEFAULTACCOUNTVALUE = 10000 # 10 000 usd
 
-# SECURITY STUFF
-manager = LoginManager(environ["SECRET"], '/login') # , use_cookie=True
-@manager.user_loader()
-def load_user(name: str):  # could also be an asynchronous function
-    res = accountsCol.find_one({"name": name})
-    if res is None:
-        return None
-    else:
-        return Account(**res)
-    
-def logTrade(stock, amount, price, direction, account):
-    if direction not in ["buy", "sell"]:
-        raise HTTPException(status_code=400, detail="Invalid direction. has to be buy or sell")
-    trade = {
-        "stockname" : stock,
-        "amount" : amount,
-        "price" : round(price,2),
-        "volume" : round(amount * price, 2),
-        "direction" : direction,
-        "account" : account,
-        "timestamp" : __getStringNow()
-    }
-    tradesCol.insert_one(trade)
-
-## login related stuff
-@app.post('/login')
-def login(data: OAuth2PasswordRequestForm = Depends()):
-    name = data.username
-    password = data.password
-    user = load_user(name)
-    
-    if not user:
-        print("user not found")
-        raise InvalidCredentialsException  # you can also use your own HTTPException
-    elif not check_password_hash(user.hashedPw, password):
-        print("wrong password")
-        # print("wrong password", __passwdHash(password)[-8:], user.hashedPw[-8:], password, __passwdHash(password)[-8:])
-        raise InvalidCredentialsException
-    else:
-        access_token = manager.create_access_token(
-            data=dict(sub=name), expires=timedelta(hours=12)
-        )
-        # manager.set_cookie(data, access_token)
-        return {'access_token': access_token, 'token_type': 'bearer'}
-
-@app.get('/protected')
-def protected_route(t = Depends(manager)):
-    return {"message": "you are logged in!"}
-## end login related stuff
-
-def __passwdHash(passwd):
-    return generate_password_hash(passwd, method='pbkdf2:sha512')
-
-def stockNameCheck(stock):
-    if "USDT" not in stock:
-        stock += "USDT"
-    return stock
 
 @app.post("/createNewAccount", response_model=Account)
 async def createNewAccount(account: Account):
@@ -109,8 +50,7 @@ async def createNewAccount(account: Account):
     if not res is None:
         raise HTTPException(status_code=400, detail="Account already exists")
     else:
-        account.hashedPw = __passwdHash(account.hashedPw)
-        accountsCol.insert_one(jsonable_encoder(account))
+        accountsCol.insert_one(account)
         return account
     
 @app.get("/getPortfolio", response_model = dict)

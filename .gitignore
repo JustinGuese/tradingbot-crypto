@@ -1,3 +1,2 @@
-tradingbot-backend/accounthandler/src/.env
-tradingbot-backend/accounthandler/src/__pycache__
-*.env
+.env
+**__pycache__**

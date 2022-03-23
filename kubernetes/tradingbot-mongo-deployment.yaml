@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: tradingbot
+  labels:
+    service: tradingbot-mongo-data
+  name: tradingbot-mongo-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: tradingbot
+  labels:
+    service: tradingbot-mongo
+  name: tradingbot-mongo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: tradingbot-mongo
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: tradingbot-mongo
+    spec:
+      containers:
+        - image: mongo:latest
+          name: tradingbot-mongo
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - mountPath: /data/db/
+              name: tradingbot-mongo-data
+      restartPolicy: Always
+      volumes:
+        - name: tradingbot-mongo-data
+          persistentVolumeClaim:
+            claimName: tradingbot-mongo-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: tradingbot
+  labels:
+    service: tradingbot-mongo
+  name: tradingbot-mongo
+spec:
+  type: NodePort
+  ports:
+    - name: "tradingbot-mongo-service"
+      port: 27017
+      targetPort: 27017
+      nodePort: 30001
+  selector:
+    service: tradingbot-mongo
