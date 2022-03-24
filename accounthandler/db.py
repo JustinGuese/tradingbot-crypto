@@ -50,7 +50,10 @@ class PriceHistory(Base):
     low= Column(Float)
     close= Column(Float)
     volume= Column(Float)
-    timestamp= Column(DateTime)
+    nrTrades = Column(Integer)
+    tbbasevolume = Column(Float)
+    tbquotevolume = Column(Float)
+    opentime= Column(DateTime)
 
 # pydantic models
 
@@ -87,6 +90,9 @@ class PriceHistoryPD(BaseModel):
     low: float
     close: float
     volume: float
-    timestamp: datetime = datetime.utcnow()
+    nrTrades: int
+    tbbasevolume: float
+    tbquotevolume: float
+    opentime: datetime = datetime.utcnow()
     class Config:
         orm_mode = True

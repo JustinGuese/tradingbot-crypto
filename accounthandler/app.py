@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
-    AccountPD, TradePD, ErrorPD, PriceHistoryPD
+    AccountPD, TradePD, ErrorPD, PriceHistoryPD, \
+    Account, Trade, Error, PriceHistory
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -27,16 +28,14 @@ def get_db():
 
 app = FastAPI()
 
-binanceapi = None
-SYMBOLS = []
+binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
+environ["SYMBOLS"] = "BTC,ETH,MATIC,POL,AVAX,XRP,BNB,LINK,ADA"
+SYMBOLS = environ["SYMBOLS"].split(",")
+SYMBOLS = environ["SYMBOLS"].split(",")
+SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
 
-@app.on_event("startup")
-def startup_event():
-    binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
-
-    environ["SYMBOLS"] = "BTC,ETH,MATIC,POL,AVAX,XRP,BNB,LINK,ADA"
-    SYMBOLS = environ["SYMBOLS"].split(",")
-    SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
+# @app.on_event("startup")
+# def startup_event():
     # also check with DB to make sure we have everything
     # uniqueSymbols = pricehistoryDB.distinct("symbol")
     # for symbol in uniqueSymbols:
@@ -48,10 +47,11 @@ def startup_event():
     #             # print(e)
     #             print("startup: Failed to get historic prices for symbol: " + symbol)
 
+
 # checks if account exists and returns it if it does
 def getAccount(name: str, db: Session = Depends(get_db)):
     # db.query(models.Record).all()
-    account = db.query(AccountPD).filter(AccountPD.name == name).first()
+    account = db.query(Account).filter(Account.name == name).first()
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
@@ -59,14 +59,14 @@ def getAccount(name: str, db: Session = Depends(get_db)):
 @app.put("/accounts/{name}")
 def create_account(name: str, description: str = "", startmoney: float = 10000., db: Session = Depends(get_db)):
     # check if account exists
-    account = db.query(AccountPD).filter(AccountPD.name == name).first()
+    account = db.query(Account).filter(Account.name == name).first()
     if account is not None:
         raise HTTPException(status_code=409, detail="Account already exists")
     # create account
     portfolio = {
         "USDT": startmoney,
     }
-    account = AccountPD(name=name, portfolio=portfolio, description=description, lastTrade=datetime.utcnow())
+    account = Account(name=name, portfolio=portfolio, description=description, lastTrade=datetime.utcnow())
     db.add(account)
     db.commit()
     return account
@@ -117,34 +117,35 @@ def getHistoricPrices(symbol, interval = "60m", lookback = "2 hour ago UTC"):
     hist_df["id"] = hist_df.apply(createHistoricPriceId, axis=1)
     return hist_df
 
-def savePrice2DB(df, db: Session = Depends(get_db)):
+def savePrice2DB(df, db):
     # write only those to DB that are not already in there
     bulk = []
     for i in range(len(df)):
-        bulk.append(PriceHistoryPD(df.iloc[i].to_dict()))
-    db.bulk_save_objects(bulk)
+        obj = PriceHistory(**df.iloc[i].to_dict())
+        db.add(obj)
     db.commit()
 
 @app.get("/update/price")
-def update():
+def update(db: Session = Depends(get_db)):
+    print("geddin updates for: ", SYMBOLS)
     for symbol in SYMBOLS:
         try:
             histDF = getHistoricPrices(symbol)
         except Exception as e:
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
-        savePrice2DB(histDF)
+        savePrice2DB(histDF, db)
         
 
 @app.get("/update/priceBig")
-def bigUpdate(symbolSelection = SYMBOLS):
+def bigUpdate(symbolSelection = SYMBOLS, db: Session = Depends(get_db)):
     for symbol in symbolSelection:
         try:
             histDF = getHistoricPrices(symbol, lookback="5 year ago UTC")
         except Exception as e:
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
-        savePrice2DB(histDF)
+        savePrice2DB(histDF, db)
 
 # apewisdom
 # @app.get("/update/apewisdom/")
