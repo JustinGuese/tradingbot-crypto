@@ -208,6 +208,10 @@ def hourlyUpdate(db: Session = Depends(get_db)):
 def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).all()
 
+@app.get("/apewisdom/")
+def apewisdomGetAll(db: Session = Depends(get_db)):
+    return db.query(ApeRank).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(hours = 1.5)).all()
+
 # get price data
 @app.get("/priceHistoric/{symbol}/{lookbackdays}")
 def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(get_db)):

@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tradingbot-aperanksimple
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "2 12 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: tradingbot-aperanksimple
+            image: guestros/tradingbot-aperanksimple:latest
+            imagePullPolicy: Always
+          restartPolicy: OnFailure
