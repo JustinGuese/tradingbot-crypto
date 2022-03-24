@@ -8,11 +8,12 @@ from typing import List, Dict
 from os import environ
 import pandas as pd
 from dotenv import load_dotenv
+load_dotenv() 
 from requests import get, post
 from datetime import datetime, timedelta
-load_dotenv() 
 import uvicorn
 from hashlib import sha512
+import json
 
 Base.metadata.create_all(bind=engine)
 
@@ -49,7 +50,7 @@ SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
 
 
 # checks if account exists and returns it if it does
-def getAccount(name: str, db: Session = Depends(get_db)):
+def getAccount(name: str, db):
     # db.query(models.Record).all()
     account = db.query(Account).filter(Account.name == name).first()
     if account is None:
@@ -66,15 +67,24 @@ def create_account(name: str, description: str = "", startmoney: float = 10000.,
     portfolio = {
         "USDT": startmoney,
     }
-    account = Account(name=name, portfolio=portfolio, description=description, lastTrade=datetime.utcnow())
+    account = Account(name=name, portfolio=portfolio, description=description, 
+        lastTrade=datetime.utcnow(), netWorth = startmoney, lastUpdateWorth = datetime.utcnow())
     db.add(account)
     db.commit()
     return account
 
+@app.get("/accounts/")
+def getAccounts(db: Session = Depends(get_db)):
+    return db.query(Account.name).all()
+
+@app.get("/accounts/{name}")
+def get_account(name: str, db: Session = Depends(get_db)):
+    return getAccount(name, db)
+
 @app.get("/portfolio/{name}", response_model = Dict[str, float])
-def get_portfolio(name: str):
-    account = getAccount(name)
-    return account["portfolio"]
+def get_portfolio(name: str, db: Session = Depends(get_db)):
+    account = getAccount(name, db)
+    return account.portfolio
 
 @app.get("/symbolcheck/{symbol}")
 def check_symbol(symbol: str):
@@ -125,8 +135,8 @@ def savePrice2DB(df, db):
         db.merge(obj)
     db.commit()
 
-@app.get("/update/price")
-def update(db: Session = Depends(get_db)):
+# @app.get("/update/price")
+def update(db):
     print("geddin updates for: ", SYMBOLS)
     for symbol in SYMBOLS:
         try:
@@ -135,6 +145,28 @@ def update(db: Session = Depends(get_db)):
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
         savePrice2DB(histDF, db)
+
+# 
+def __updatePortfolioWorth(db):
+    symbolPrices = dict()
+    allAccounts = db.query(Account).all()
+    for account in allAccounts:
+        netWorth = account.portfolio.get("USDT", 0.)
+        for symbol, amount in account.portfolio.items():
+            if symbol != "USDT":
+                if symbol not in symbolPrices:
+                    try:
+                        symbolPrices[symbol] = getCurrentPrice(symbol)
+                    except Exception as e:
+                        raise Exception("problem with: " + symbol + ": " + str(e))
+                    netWorth += symbolPrices[symbol] * amount
+        account.netWorth = netWorth
+        account.lastUpdateWorth = datetime.utcnow()
+        db.commit()
+
+@app.get("/update/portfolioworth")
+def updatePortfolioWorth(db: Session = Depends(get_db)):
+    __updatePortfolioWorth(db)
         
 
 @app.get("/update/priceBig")
@@ -152,8 +184,8 @@ def apeTickerFix(ticker):
 
 # apewisdom
 # supposed to be executed daily
-@app.get("/update/apewisdom/")
-def apewisdom(db: Session = Depends(get_db)):
+# @app.get("/update/apewisdom/")
+def apewisdom(db):
     jsdata = get("https://apewisdom.io/api/v1.0/filter/all-crypto/").json()["results"]
     df = pd.DataFrame(jsdata)
     df.drop(["name", "rank_24h_ago", "mentions_24h_ago"], axis=1, inplace=True)
@@ -165,6 +197,16 @@ def apewisdom(db: Session = Depends(get_db)):
         obj = ApeRank(**df.iloc[i].to_dict())
         db.merge(obj)
     db.commit()
+
+@app.get("/update/hourly/")
+def hourlyUpdate(db: Session = Depends(get_db)):
+    update(db) # prices update hourly
+    apewisdom(db)
+    __updatePortfolioWorth(db)
+
+@app.get("/apewisdom/{ticker}/{lookback}")
+def apewisdomGet(ticker: str, lookback: str, db: Session = Depends(get_db)):
+    return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(lookback)).all()
 
 # get price data
 @app.get("/priceHistoric/{symbol}/{lookbackdays}")
@@ -184,6 +226,62 @@ def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(g
     hist = hist.set_index("opentime")
     hist.drop(["id"], axis=1, inplace=True)
     return hist.to_dict()
+
+## trade functioms
+
+def getCurrentPrice(symbol):
+    return float(binanceapi.get_avg_price(symbol=symbol)["price"])
+
+COMMISSION = 0.00125
+@app.put("/buy/{name}/{symbol}/{amount}")
+def buy(name: str, symbol: str, amount: float, db: Session = Depends(get_db)):
+    account = getAccount(name, db)
+    # portfolio = account.portfolio
+    usdt = account.portfolio["USDT"]
+    currentPrice = getCurrentPrice(symbol)
+    cost = currentPrice * amount * (1 + COMMISSION)
+    if cost > usdt:
+        raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
+    account.portfolio["USDT"] = usdt - cost
+    account.portfolio[symbol] = account.portfolio.get(symbol, 0) + amount
+    # account.portfolio = json.dumps(portfolio)
+    db.merge(account)
+    db.commit()
+    return account.portfolio
+
+def __sell(name, symbol, amount, db):
+    account = getAccount(name, db)
+    # portfolio = account.portfolio
+    amountSymbol = account.portfolio.get(symbol, 0)
+    if amountSymbol == 0:
+        raise HTTPException(status_code=400, detail="No such symbol in portfolio. portfolio: %s" % str(account.portfolio))
+    if amount > amountSymbol:
+        raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
+    if amount == -1:
+        # means sell all
+        amount = amountSymbol
+    win = amount * getCurrentPrice(symbol) * (1 - COMMISSION)
+    account.portfolio[symbol] = amountSymbol - amount
+    account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
+    # account.portfolio = account.portfolio
+    db.merge(account)
+    db.commit()
+    return account.portfolio
+
+# sell
+@app.put("/sell/{name}/{symbol}/{amount}")
+def sell(name: str, symbol: str, amount: float = -1, db: Session = Depends(get_db)):
+    return __sell(name, symbol, amount, db)
+
+@app.post("/emergencyLiquidate/{name}")
+def emergencyLiquidate(name: str, db: Session = Depends(get_db)):
+    account = getAccount(name, db)
+    portfolio = account.portfolio
+    for symbol in portfolio:
+        if symbol != "USDT":
+            _ = __sell(name, symbol, -1, db)
+    return account
+
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+apiVersion: v1
+data:
+  BINANCE_KEY: BT0hUfTYTOj4fOvjiOckTpEVflzRXS6mUPRdFn1CLHyq6OwVej0yPZYCpNsymgOc
+  BINANCE_SECRET: Wo4R6PFcC2noWElCSNgTmjW2DdBb6Tupoff8pT7SLl7gMVwPDcXyKRwzCbFnHVh5
+  PSQL_URL: postgres:tradingbot@192.168.178.36:30001
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: accounthandler-env
+  name: env
+  namespace: trading

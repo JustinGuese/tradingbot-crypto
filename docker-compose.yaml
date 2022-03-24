@@ -1,3 +1,10 @@
 version: "3"
 services:
-  
+  accounthandler:
+    image: guestros/tradingbot-accounthandler:latest
+    build: ./accounthandler
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    # restart: on-failure

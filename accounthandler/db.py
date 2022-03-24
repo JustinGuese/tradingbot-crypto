@@ -7,8 +7,10 @@ from sqlalchemy.types import DateTime
 from typing import List, Dict
 from datetime import datetime
 from pydantic import BaseModel
+from sqlalchemy.ext.mutable import MutableDict
 
-environ["PSQL_URL"] = "postgres:tradingbot@192.168.178.36:30001"
+
+# environ["PSQL_URL"] = "postgres:tradingbot@192.168.178.36:30001"
 
 DATABASE_URL = "postgresql+psycopg2://" + environ["PSQL_URL"] # user:password@postgresserver/db
 
@@ -23,8 +25,10 @@ class Account(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(10), unique=True)
     description = Column(String(100))
-    portfolio = Column(JSON)
+    portfolio = Column(MutableDict.as_mutable(JSON))
     lastTrade = Column(DateTime)
+    netWorth = Column(Float)
+    lastUpdateWorth = Column(DateTime)
 
 class Trade(Base):
     __tablename__ = "trades"

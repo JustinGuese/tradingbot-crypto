@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.26.1 (a9d05d509)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: accounthandler
+  name: accounthandler
+  namespace: trading
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: accounthandler
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert
+        kompose.version: 1.26.1 (a9d05d509)
+      creationTimestamp: null
+      labels:
+        io.kompose.service: accounthandler
+    spec:
+      containers:
+        - env:
+            - name: BINANCE_KEY
+              valueFrom:
+                configMapKeyRef:
+                  key: BINANCE_KEY
+                  name: env
+            - name: BINANCE_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  key: BINANCE_SECRET
+                  name: env
+            - name: PSQL_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: PSQL_URL
+                  name: env
+          image: guestros/tradingbot-accounthandler:latest
+          name: accounthandler
+          ports:
+            - containerPort: 8000
+          resources: {}
+      restartPolicy: Always
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.26.1 (a9d05d509)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: accounthandler
+  name: accounthandler
+  namespace: trading
+spec:
+  type: NodePort
+  ports:
+    - name: "8000"
+      port: 8000
+      targetPort: 8000
+      nodePort: 30002
+  selector:
+    io.kompose.service: accounthandler
