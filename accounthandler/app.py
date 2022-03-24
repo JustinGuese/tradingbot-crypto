@@ -75,7 +75,7 @@ def create_account(name: str, description: str = "", startmoney: float = 10000.,
 
 @app.get("/accounts/")
 def getAccounts(db: Session = Depends(get_db)):
-    return db.query(Account.name).all()
+    return db.query(Account.name, Account.netWorth, Account.portfolio).order_by(Account.netWorth.desc()).all()
 
 @app.get("/accounts/ranked/")
 def getRankedAccounts(db: Session = Depends(get_db)):
