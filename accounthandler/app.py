@@ -11,13 +11,28 @@ from datetime import datetime, timedelta
 load_dotenv() 
 import uvicorn
 
-binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
-
-environ["SYMBOLS"] = "BTC,ETH,MATIC,POL,AVAX,XRP,BNB,LINK,ADA"
-SYMBOLS = environ["SYMBOLS"].split(",")
-SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
-
 app = FastAPI()
+
+binanceapi = None
+SYMBOLS = []
+
+@app.on_event("startup")
+def startup_event():
+    binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
+
+    environ["SYMBOLS"] = "BTC,ETH,MATIC,POL,AVAX,XRP,BNB,LINK,ADA"
+    SYMBOLS = environ["SYMBOLS"].split(",")
+    SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
+    # also check with DB to make sure we have everything
+    uniqueSymbols = pricehistoryDB.distinct("symbol")
+    for symbol in uniqueSymbols:
+        if symbol not in SYMBOLS:
+            try:
+                # pricehistoryDB.insert_many(getHistoricPrices(symbol).to_dict("records"))
+                SYMBOLS.append(symbol) # add that symbol from the db
+            except Exception as e:
+                # print(e)
+                print("startup: Failed to get historic prices for symbol: " + symbol)
 
 # checks if account exists and returns it if it does
 def getAccount(name: str):
@@ -116,7 +131,15 @@ def getPriceHistoric(symbol: str, lookbackdays: int = 1):
     lookback = datetime.utcnow() - timedelta(days=lookbackdays)
     hist = pricehistoryDB.find({"symbol": symbol, "opentime": {"$gte": lookback}})
     hist = [elm for elm in hist]
-    return hist
+    if len(hist) == 0:
+        # raise HTTPException(status_code=404, detail="Price history not found")
+        # download data for that symbol
+        SYMBOLS.append(symbol)
+
+    hist = pd.DataFrame(hist)
+    hist = hist.set_index("opentime")
+    hist.drop(["_id"], axis=1, inplace=True)
+    return hist.to_dict()
 
 
 if __name__ == "__main__":
