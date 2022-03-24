@@ -1,38 +1,86 @@
 from os import environ
-from pymongo import MongoClient
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Column, Integer, String, Boolean, JSON, Float
+from sqlalchemy.types import DateTime
 from typing import List, Dict
 from datetime import datetime
 from pydantic import BaseModel
 
-environ["MONGODB_URL"] = "192.168.178.36:30001"
+environ["PSQL_URL"] = "postgres:tradingbot@192.168.178.36:30001"
 
-DATABASE_URL = "mongodb://" + environ["MONGODB_URL"] # user:password@postgresserver/db
+DATABASE_URL = "postgresql+psycopg2://" + environ["PSQL_URL"] # user:password@postgresserver/db
 
-mongoclient = MongoClient(DATABASE_URL)
-tradingDB = mongoclient["trading"]
-accountsDB = tradingDB.accountsDB
-tradesDB = tradingDB.tradesDB
-errorsDB = tradingDB.errorsDB
-pricehistoryDB = tradingDB.pricehistoryDB
-socialRankDB = tradingDB.socialRankDB
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-class Account(BaseModel):
+Base = declarative_base()
+
+# declarative base
+class Account(Base):
+    __tablename__ = "accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(10), unique=True)
+    description = Column(String(100))
+    portfolio = Column(JSON)
+    lastTrade = Column(DateTime)
+
+class Trade(Base):
+    __tablename__ = "trades"
+    id = Column(Integer, primary_key=True, index=True)
+    name= Column(String(30))
+    amount= Column(Float)
+    price= Column(Float)
+    buy= Column(Boolean)
+    timestamp= Column(DateTime)
+
+class Error(Base):
+    __tablename__ = "errors"
+    id = Column(Integer, primary_key=True, index=True)
+    message= Column(String(30))
+    timestamp= Column(DateTime)
+
+class PriceHistory(Base):
+    __tablename__ = "pricehistory"
+    id = Column(String(30), primary_key=True, index=True)
+    symbol= Column(String(30))
+    open= Column(Float)
+    high= Column(Float)
+    low= Column(Float)
+    close= Column(Float)
+    volume= Column(Float)
+    timestamp= Column(DateTime)
+
+# pydantic models
+
+class AccountPD(BaseModel):
+    id: int
     name: str
     portfolio: Dict[str, float]
     lastTrade: datetime = datetime.utcnow()
+    class Config:
+        orm_mode = True
 
-class Trade(BaseModel):
+class TradePD(BaseModel):
+    id: int
     name: str
     amount: float
     price: float
     buy: bool
     timestamp: datetime = datetime.utcnow()
+    class Config:
+        orm_mode = True
 
-class Error(BaseModel):
+class ErrorPD(BaseModel):
+    id: int
     message: str
     timestamp: datetime = datetime.utcnow()
+    class Config:
+        orm_mode = True
 
-class PriceHistory(BaseModel):
+class PriceHistoryPD(BaseModel):
+    id: str
     symbol: str
     open: float
     high: float
@@ -40,3 +88,5 @@ class PriceHistory(BaseModel):
     close: float
     volume: float
     timestamp: datetime = datetime.utcnow()
+    class Config:
+        orm_mode = True

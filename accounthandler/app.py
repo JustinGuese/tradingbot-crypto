@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
-from db import accountsDB, tradesDB, errorsDB, pricehistoryDB, \
-    Account, Trade, Error, PriceHistory, socialRankDB
+from fastapi import FastAPI, HTTPException, Depends
+from db import SessionLocal, engine, Base, \
+    AccountPD, TradePD, ErrorPD, PriceHistoryPD
+from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
 from os import environ
@@ -10,6 +11,19 @@ from requests import get, post
 from datetime import datetime, timedelta
 load_dotenv() 
 import uvicorn
+from hashlib import sha512
+
+Base.metadata.create_all(bind=engine)
+
+
+# Dependency
+def get_db():
+    try:
+        db = SessionLocal()
+        yield db
+    finally:
+        db.close()
+
 
 app = FastAPI()
 
@@ -24,35 +38,37 @@ def startup_event():
     SYMBOLS = environ["SYMBOLS"].split(",")
     SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
     # also check with DB to make sure we have everything
-    uniqueSymbols = pricehistoryDB.distinct("symbol")
-    for symbol in uniqueSymbols:
-        if symbol not in SYMBOLS:
-            try:
-                # pricehistoryDB.insert_many(getHistoricPrices(symbol).to_dict("records"))
-                SYMBOLS.append(symbol) # add that symbol from the db
-            except Exception as e:
-                # print(e)
-                print("startup: Failed to get historic prices for symbol: " + symbol)
+    # uniqueSymbols = pricehistoryDB.distinct("symbol")
+    # for symbol in uniqueSymbols:
+    #     if symbol not in SYMBOLS:
+    #         try:
+    #             # pricehistoryDB.insert_many(getHistoricPrices(symbol).to_dict("records"))
+    #             SYMBOLS.append(symbol) # add that symbol from the db
+    #         except Exception as e:
+    #             # print(e)
+    #             print("startup: Failed to get historic prices for symbol: " + symbol)
 
 # checks if account exists and returns it if it does
-def getAccount(name: str):
-    account = accountsDB.find_one({"name": name})
-    if account is not None:
+def getAccount(name: str, db: Session = Depends(get_db)):
+    # db.query(models.Record).all()
+    account = db.query(AccountPD).filter(AccountPD.name == name).first()
+    if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
 
 @app.put("/accounts/{name}")
-def create_account(name: str, startmoney: float = 10000.):
+def create_account(name: str, description: str = "", startmoney: float = 10000., db: Session = Depends(get_db)):
     # check if account exists
-    account = accountsDB.find_one({"name": name})
+    account = db.query(AccountPD).filter(AccountPD.name == name).first()
     if account is not None:
         raise HTTPException(status_code=409, detail="Account already exists")
     # create account
     portfolio = {
         "USDT": startmoney,
     }
-    account = Account(name=name, portfolio=portfolio)
-    accountsDB.insert_one(account.dict())
+    account = AccountPD(name=name, portfolio=portfolio, description=description, lastTrade=datetime.utcnow())
+    db.add(account)
+    db.commit()
     return account
 
 @app.get("/portfolio/{name}", response_model = Dict[str, float])
@@ -70,6 +86,9 @@ def check_symbol(symbol: str):
             return info
     except:
         return False
+
+def createHistoricPriceId(row):
+    return sha512((row["symbol"] + str(row["opentime"])).encode()).hexdigest()[:10]
 
 def getHistoricPrices(symbol, interval = "60m", lookback = "2 hour ago UTC"):
     if interval == "1m":
@@ -94,7 +113,17 @@ def getHistoricPrices(symbol, interval = "60m", lookback = "2 hour ago UTC"):
     for col in ['nrTrades']:
         hist_df[col] = hist_df[col].astype(int)
     hist_df["symbol"] = symbol
+    # then create id out of it
+    hist_df["id"] = hist_df.apply(createHistoricPriceId, axis=1)
     return hist_df
+
+def savePrice2DB(df, db: Session = Depends(get_db)):
+    # write only those to DB that are not already in there
+    bulk = []
+    for i in range(len(df)):
+        bulk.append(PriceHistoryPD(df.iloc[i].to_dict()))
+    db.bulk_save_objects(bulk)
+    db.commit()
 
 @app.get("/update/price")
 def update():
@@ -104,41 +133,43 @@ def update():
         except Exception as e:
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
-        # write only those to DB that are not already in there
-        pricehistoryDB.insert_many(histDF.to_dict(orient="records"))
+        savePrice2DB(histDF)
+        
 
 @app.get("/update/priceBig")
-def bigUpdate():
-    for symbol in SYMBOLS:
+def bigUpdate(symbolSelection = SYMBOLS):
+    for symbol in symbolSelection:
         try:
             histDF = getHistoricPrices(symbol, lookback="5 year ago UTC")
         except Exception as e:
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
-        # write only those to DB that are not already in there
-        pricehistoryDB.insert_many(histDF.to_dict(orient="records"))
+        savePrice2DB(histDF)
 
 # apewisdom
-@app.get("/update/apewisdom/")
-def apewisdom():
-    jsdata = get("https://apewisdom.io/api/v1.0/filter/all-crypto/").json()["results"]
-    update = { str(datetime.utcnow()) : jsdata }
-    socialRankDB.insert_one(update)
+# @app.get("/update/apewisdom/")
+# def apewisdom():
+#     jsdata = get("https://apewisdom.io/api/v1.0/filter/all-crypto/").json()["results"]
+#     update = { str(datetime.utcnow()) : jsdata }
+#     socialRankDB.insert_one(update)
 
 # get price data
 @app.get("/priceHistoric/{symbol}/{lookbackdays}")
-def getPriceHistoric(symbol: str, lookbackdays: int = 1):
+def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(get_db)):
     lookback = datetime.utcnow() - timedelta(days=lookbackdays)
-    hist = pricehistoryDB.find({"symbol": symbol, "opentime": {"$gte": lookback}})
-    hist = [elm for elm in hist]
+    hist = db.query(PriceHistoryPD).filter(PriceHistoryPD.symbol == symbol).filter(PriceHistoryPD.opentime > lookback).all()
     if len(hist) == 0:
         # raise HTTPException(status_code=404, detail="Price history not found")
         # download data for that symbol
         SYMBOLS.append(symbol)
+        # trigger update
+        bigUpdate([symbol])
+        # recursive call of this fct
+        return getPriceHistoric(symbol, lookbackdays)
 
     hist = pd.DataFrame(hist)
     hist = hist.set_index("opentime")
-    hist.drop(["_id"], axis=1, inplace=True)
+    hist.drop(["id"], axis=1, inplace=True)
     return hist.to_dict()
 
 

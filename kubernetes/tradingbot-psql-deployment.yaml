@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: trading
+  labels:
+    service: tradingbot-postgresql-data
+  name: tradingbot-postgresql-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: trading
+  labels:
+    service: tradingbot-postgresql
+  name: tradingbot-postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: tradingbot-postgresql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: tradingbot-postgresql
+    spec:
+      containers:
+        - image: postgres:alpine
+          name: tradingbot-postgresql
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              value: tradingbot
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data/
+              name: tradingbot-postgresql-data
+      restartPolicy: Always
+      volumes:
+        - name: tradingbot-postgresql-data
+          persistentVolumeClaim:
+            claimName: tradingbot-postgresql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: trading
+  labels:
+    service: tradingbot-postgresql
+  name: tradingbot-postgresql
+spec:
+  type: NodePort
+  ports:
+    - name: "tradingbot-postgresql-service"
+      port: 5432
+      targetPort: 5432
+      nodePort: 30001
+  selector:
+    service: tradingbot-postgresql

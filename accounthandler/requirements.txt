@@ -1,5 +1,6 @@
 fastapi
-pymongo
+SqlAlchemy
+psycopg2-binary
 uvicorn[standard]
 python-binance
 python-dotenv
