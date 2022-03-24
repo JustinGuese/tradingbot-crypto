@@ -77,6 +77,10 @@ def create_account(name: str, description: str = "", startmoney: float = 10000.,
 def getAccounts(db: Session = Depends(get_db)):
     return db.query(Account.name).all()
 
+@app.get("/accounts/ranked/")
+def getRankedAccounts(db: Session = Depends(get_db)):
+    return db.query(Account.name, Account.netWorth).order_by(Account.netWorth.desc()).all()
+
 @app.get("/accounts/{name}")
 def get_account(name: str, db: Session = Depends(get_db)):
     return getAccount(name, db)
@@ -159,7 +163,7 @@ def __updatePortfolioWorth(db):
                         symbolPrices[symbol] = getCurrentPrice(symbol)
                     except Exception as e:
                         raise Exception("problem with: " + symbol + ": " + str(e))
-                    netWorth += symbolPrices[symbol] * amount
+                netWorth += symbolPrices[symbol] * amount
         account.netWorth = netWorth
         account.lastUpdateWorth = datetime.utcnow()
         db.commit()
