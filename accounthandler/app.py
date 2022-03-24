@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistoryPD, \
-    Account, Trade, Error, PriceHistory
+    Account, Trade, Error, PriceHistory, ApeRank
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -122,7 +122,7 @@ def savePrice2DB(df, db):
     bulk = []
     for i in range(len(df)):
         obj = PriceHistory(**df.iloc[i].to_dict())
-        db.add(obj)
+        db.merge(obj)
     db.commit()
 
 @app.get("/update/price")
@@ -147,12 +147,24 @@ def bigUpdate(symbolSelection = SYMBOLS, db: Session = Depends(get_db)):
             continue
         savePrice2DB(histDF, db)
 
+def apeTickerFix(ticker):
+    return ticker.replace(".X", "USDT")
+
 # apewisdom
-# @app.get("/update/apewisdom/")
-# def apewisdom():
-#     jsdata = get("https://apewisdom.io/api/v1.0/filter/all-crypto/").json()["results"]
-#     update = { str(datetime.utcnow()) : jsdata }
-#     socialRankDB.insert_one(update)
+# supposed to be executed daily
+@app.get("/update/apewisdom/")
+def apewisdom(db: Session = Depends(get_db)):
+    jsdata = get("https://apewisdom.io/api/v1.0/filter/all-crypto/").json()["results"]
+    df = pd.DataFrame(jsdata)
+    df.drop(["name", "rank_24h_ago", "mentions_24h_ago"], axis=1, inplace=True)
+    df["ticker"] = df["ticker"].apply(apeTickerFix)
+    df["timestamp"] = datetime.utcnow()
+    for col in ["mentions", "upvotes", "rank"]:
+        df[col] = df[col].astype(int)
+    for i in range(len(df)):
+        obj = ApeRank(**df.iloc[i].to_dict())
+        db.merge(obj)
+    db.commit()
 
 # get price data
 @app.get("/priceHistoric/{symbol}/{lookbackdays}")

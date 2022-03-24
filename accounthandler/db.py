@@ -55,6 +55,15 @@ class PriceHistory(Base):
     tbquotevolume = Column(Float)
     opentime= Column(DateTime)
 
+class ApeRank(Base):
+    __tablename__ = "social_aperank"
+    id = Column(Integer, primary_key=True, index=True)
+    rank = Column(Integer)
+    ticker = Column(String(10))
+    timestamp = Column(DateTime)
+    mentions = Column(Integer)
+    upvotes = Column(Integer)
+
 # pydantic models
 
 class AccountPD(BaseModel):
