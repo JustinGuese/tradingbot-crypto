@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
-    AccountPD, TradePD, ErrorPD, PriceHistoryPD, \
+    AccountPD, TradePD, ErrorPD, PriceHistory, \
     Account, Trade, Error, PriceHistory, ApeRank
 from sqlalchemy.orm import Session
 from binance import Client
@@ -205,14 +205,14 @@ def hourlyUpdate(db: Session = Depends(get_db)):
     __updatePortfolioWorth(db)
 
 @app.get("/apewisdom/{ticker}/{lookback}")
-def apewisdomGet(ticker: str, lookback: str, db: Session = Depends(get_db)):
-    return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(lookback)).all()
+def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
+    return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).all()
 
 # get price data
 @app.get("/priceHistoric/{symbol}/{lookbackdays}")
 def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(get_db)):
     lookback = datetime.utcnow() - timedelta(days=lookbackdays)
-    hist = db.query(PriceHistoryPD).filter(PriceHistoryPD.symbol == symbol).filter(PriceHistoryPD.opentime > lookback).all()
+    hist = db.query(PriceHistory).filter(PriceHistory.symbol == symbol).filter(PriceHistory.opentime > lookback).all()
     if len(hist) == 0:
         # raise HTTPException(status_code=404, detail="Price history not found")
         # download data for that symbol
@@ -221,8 +221,8 @@ def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(g
         bigUpdate([symbol])
         # recursive call of this fct
         return getPriceHistoric(symbol, lookbackdays)
-
-    hist = pd.DataFrame(hist)
+    hist = pd.DataFrame([h.__dict__ for h in hist])
+    # print(hist.iloc[0])
     hist = hist.set_index("opentime")
     hist.drop(["id"], axis=1, inplace=True)
     return hist.to_dict()
@@ -234,11 +234,13 @@ def getCurrentPrice(symbol):
 
 COMMISSION = 0.00125
 @app.put("/buy/{name}/{symbol}/{amount}")
-def buy(name: str, symbol: str, amount: float, db: Session = Depends(get_db)):
+def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Session = Depends(get_db)):
     account = getAccount(name, db)
     # portfolio = account.portfolio
     usdt = account.portfolio["USDT"]
     currentPrice = getCurrentPrice(symbol)
+    if amountInUSD:
+        amount = amount / currentPrice
     cost = currentPrice * amount * (1 + COMMISSION)
     if cost > usdt:
         raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
@@ -249,18 +251,22 @@ def buy(name: str, symbol: str, amount: float, db: Session = Depends(get_db)):
     db.commit()
     return account.portfolio
 
-def __sell(name, symbol, amount, db):
+def __sell(name, symbol, amount, amountInUSD, db):
     account = getAccount(name, db)
     # portfolio = account.portfolio
     amountSymbol = account.portfolio.get(symbol, 0)
+    currentPrice = getCurrentPrice(symbol)
     if amountSymbol == 0:
         raise HTTPException(status_code=400, detail="No such symbol in portfolio. portfolio: %s" % str(account.portfolio))
-    if amount > amountSymbol:
-        raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
     if amount == -1:
         # means sell all
         amount = amountSymbol
-    win = amount * getCurrentPrice(symbol) * (1 - COMMISSION)
+    elif amountInUSD:
+        amount = amount / currentPrice
+    if amount > amountSymbol:
+        raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
+    
+    win = amount * currentPrice * (1 - COMMISSION)
     account.portfolio[symbol] = amountSymbol - amount
     account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
     # account.portfolio = account.portfolio
@@ -270,8 +276,8 @@ def __sell(name, symbol, amount, db):
 
 # sell
 @app.put("/sell/{name}/{symbol}/{amount}")
-def sell(name: str, symbol: str, amount: float = -1, db: Session = Depends(get_db)):
-    return __sell(name, symbol, amount, db)
+def sell(name: str, symbol: str, amount: float = -1, amountInUSD: bool = True, db: Session = Depends(get_db)):
+    return __sell(name, symbol, amount, amountInUSD, db)
 
 @app.post("/emergencyLiquidate/{name}")
 def emergencyLiquidate(name: str, db: Session = Depends(get_db)):
@@ -279,7 +285,7 @@ def emergencyLiquidate(name: str, db: Session = Depends(get_db)):
     portfolio = account.portfolio
     for symbol in portfolio:
         if symbol != "USDT":
-            _ = __sell(name, symbol, -1, db)
+            _ = __sell(name, symbol, -1, False, db)
     return account
 
 

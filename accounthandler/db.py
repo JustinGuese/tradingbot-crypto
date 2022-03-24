@@ -8,7 +8,8 @@ from typing import List, Dict
 from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy.ext.mutable import MutableDict
-
+from dotenv import load_dotenv
+load_dotenv() 
 
 # environ["PSQL_URL"] = "postgres:tradingbot@192.168.178.36:30001"
 
