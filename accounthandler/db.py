@@ -69,6 +69,14 @@ class ApeRank(Base):
     mentions = Column(Integer)
     upvotes = Column(Integer)
 
+class CoinGeckoTrending(Base):
+    __tablename__ = "coingecko_trending"
+    id = Column(Integer, primary_key=True, index=True)
+    rank = Column(Integer)
+    ticker = Column(String(10))
+    timestamp = Column(DateTime)
+    marketcaprank = Column(Integer)
+
 # pydantic models
 
 class AccountPD(BaseModel):

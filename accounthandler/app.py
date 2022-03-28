@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
-    Account, Trade, Error, PriceHistory, ApeRank
+    Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -37,16 +37,16 @@ SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
 
 # @app.on_event("startup")
 # def startup_event():
-    # also check with DB to make sure we have everything
-    # uniqueSymbols = pricehistoryDB.distinct("symbol")
-    # for symbol in uniqueSymbols:
-    #     if symbol not in SYMBOLS:
-    #         try:
-    #             # pricehistoryDB.insert_many(getHistoricPrices(symbol).to_dict("records"))
-    #             SYMBOLS.append(symbol) # add that symbol from the db
-    #         except Exception as e:
-    #             # print(e)
-    #             print("startup: Failed to get historic prices for symbol: " + symbol)
+# also check with DB to make sure we have everything
+# uniqueSymbols = db.query.distinct(PriceHistory.symbol).all()
+# for symbol in uniqueSymbols:
+#     if symbol not in SYMBOLS:
+#         try:
+#             # pricehistoryDB.insert_many(getHistoricPrices(symbol).to_dict("records"))
+#             SYMBOLS.append(symbol) # add that symbol from the db
+#         except Exception as e:
+#             # print(e)
+#             print("startup: Failed to get historic prices for symbol: " + symbol)
 
 
 # checks if account exists and returns it if it does
@@ -171,6 +171,31 @@ def __updatePortfolioWorth(db):
 @app.get("/update/portfolioworth")
 def updatePortfolioWorth(db: Session = Depends(get_db)):
     __updatePortfolioWorth(db)
+
+# this should only run daily
+@app.get("/update24/coingecko/trending")
+def updateCoingeckoTrending(db: Session = Depends(get_db)):
+    # takes coingecko trending data and writes it to db
+    headers = {'accept': 'application/json'}
+    response = get('https://api.coingecko.com/api/v3/search/trending', headers=headers).json()["coins"]
+    ts = datetime.utcnow()
+    for rank, coin in enumerate(response):
+        symbol = coin["item"]["symbol"]
+        symbol += "USDT"
+        existsCheck = check_symbol(symbol)
+        if not existsCheck: # is false if not exists, so only continue here if it exists
+            SYMBOLS.append(symbol)
+            # but save it to DB as well
+            # rank = Column(Integer)
+            # ticker = Column(String(10))
+            # timestamp = Column(DateTime)
+            # marketcaprank = Column(Integer)
+            cgt = CoinGeckoTrending(rank = rank, ticker = symbol, timestamp = ts, 
+                marketcaprank = coin["market_cap_rank"])
+            db.add(cgt)
+    db.commit()
+
+
         
 
 @app.get("/update/priceBig")
