@@ -1,20 +1,20 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: tradingbot-coingeckotrendhourly-hourly
+  name: tradingbot-coingeckotrendhourly-daily
   namespace: trading
 spec:
   concurrencyPolicy: "Forbid"
-  schedule: "2 * * * *"
+  schedule: "2 12 * * *"
   jobTemplate:
     spec:
       template:
         spec:
           containers:
-          - name: tradingbot-coingeckotrendhourly-hourly
+          - name: tradingbot-coingeckotrendhourly-daily
             image: guestros/tradingbot-coingeckotrending:latest
             imagePullPolicy: Always
             env:
               - name: BOTNAME
-                value: CGtrendhr
+                value: CGtrendday
           restartPolicy: OnFailure

@@ -1,5 +1,6 @@
 # aperankday
-NAME = "aperankday"
+from os import environ
+NAME = environ["BOTNAME"] # "aperankhr"
 # looks at aperank dailies and buys top 10 ranks
 from tradinghandler.trading import TradingInteractor
 from pprint import pprint

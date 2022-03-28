@@ -1,6 +1,8 @@
 
 # coinsrankday
-NAME = "CGtrendhr"
+from os import environ
+NAME = environ["BOTNAME"]
+# NAME = "CGtrendhr"
 # looks at coinsrank dailies and buys top 10 ranks
 from tradinghandler.trading import TradingInteractor
 from pprint import pprint
