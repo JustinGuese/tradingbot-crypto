@@ -7,3 +7,6 @@ docker push guestros/tradingbot-coingeckotrending:latest
 # simpleSma golden cross
 docker build -t guestros/tradingbot-simplesma-goldencross:latest ./simpleSMACross
 docker push guestros/tradingbot-simplesma-goldencross:latest
+# complexSMA
+docker build -t guestros/tradingbot-retrain-sma:latest ./calculatedSMACross
+docker push guestros/tradingbot-retrain-sma:latest
