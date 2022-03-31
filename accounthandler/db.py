@@ -77,6 +77,12 @@ class CoinGeckoTrending(Base):
     timestamp = Column(DateTime)
     marketcaprank = Column(Integer)
 
+class PortfolioTracker(Base):
+    id = Column(Integer, primary_key=True, index=True)
+    accountname = Column(String())
+    portfolioworth = Column(Float)
+    timestamp = Column(DateTime)
+
 # pydantic models
 
 class AccountPD(BaseModel):

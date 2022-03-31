@@ -11,9 +11,10 @@ import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
 from multiprocessing import Pool
+from ta.momentum import rsi
 
 
-ti = TradingInteractor(NAME)
+ti = TradingInteractor(NAME, url = "10.147.17.73")
 portfolio = ti.getPortfolio()
 usdt = portfolio["USDT"]
 
@@ -58,12 +59,12 @@ def oneSimulation(comb_tuple):
     boughtAtI = 0
     trades = []
     for i in range(len(data)):
-        SMASmall, SMABig = tmpdata.iloc[i]['smaSmall'], tmpdata.iloc[i]['smaBig']
-        if SMASmall > SMABig and nrStocks == 0:
+        SMASmall, SMABig, rsi = tmpdata.iloc[i]['smaSmall'], tmpdata.iloc[i]['smaBig'], tmpdata.iloc[i]['rsi']
+        if SMASmall > SMABig and nrStocks == 0 and rsi <= 30:
             # buy
             boughtFor, boughtAtI, money, nrStocks = buySim(tmpdata, money, nrStocks, i)
 
-        elif SMASmall < SMABig and nrStocks > 0:
+        elif SMASmall < SMABig and nrStocks > 0 and rsi >= 70:
             # sell
             trades, nrStocks, money = sellSim(tmpdata, trades, money, nrStocks, i, boughtFor, boughtAtI)
     # on last day sell if we have stocks
@@ -72,8 +73,12 @@ def oneSimulation(comb_tuple):
     
     totalWin = (money - startingMoney) / len(data) # to average it to the timestep
     # avg/median Trade per timestep (hour)
-    avgTrade = np.mean(trades)
-    medTrade = np.median(trades)
+    if len(trades) > 0:
+        avgTrade = np.mean(trades)
+        medTrade = np.median(trades)
+    else:
+        avgTrade = 0
+        medTrade = 0
 
     # we are working with hour data on crypto, so i wanna take it * 24 * 30 to get monthly averages
     totalWin *= 24 * 30
@@ -89,6 +94,7 @@ def getBestCombination(symbol):
     # get data
     # 24 hours in a day, so to get 200 we need to get the last 200 days
     data = ti.getData(symbol, lookback=60) # not a whole year
+    data["rsi"] = rsi(data["close"], 14)
     if len(data) < 200:
         raise ValueError("length of df is less than minimum 200... is: ", len(data))
     # add some randomness as well

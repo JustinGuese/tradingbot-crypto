@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
-    Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending
+    Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending, \
+        PortfolioTracker
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -166,6 +167,10 @@ def __updatePortfolioWorth(db):
                 netWorth += symbolPrices[symbol] * amount
         account.netWorth = netWorth
         account.lastUpdateWorth = datetime.utcnow()
+        db.commit()
+        # next add it to the portfolio db
+        pt = PortfolioTracker(account.name, account.netWorth, datetime.utcnow())
+        db.add(pt)
         db.commit()
 
 @app.get("/update/portfolioworth")
