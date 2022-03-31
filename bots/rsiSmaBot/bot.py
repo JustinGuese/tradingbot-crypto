@@ -89,5 +89,5 @@ for i in range(len(combs)):
                 ti.buy(symbol, usdt / len(buy) * 0.95)
 
     except Exception as e:
-        print("problem with: " + symbol + " " + str(e))
-        raise
+        print("problem/skip with: " + symbol + " " + str(e))
+        # raise
