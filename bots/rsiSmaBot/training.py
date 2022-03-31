@@ -3,7 +3,6 @@
 from os import environ
 # simplsmahr
 # environ["BOTNAME"] = "simplsmahr"
-NAME = "calcSMA"
 # looks at coinsrank dailies and buys top 10 ranks
 from tradinghandler.trading import TradingInteractor
 import numpy as np
@@ -14,7 +13,7 @@ from multiprocessing import Pool
 from ta.momentum import rsi
 
 
-ti = TradingInteractor(NAME, url = "10.147.17.73")
+ti = TradingInteractor(environ["BOTNAME"], url = "10.147.17.73")
 portfolio = ti.getPortfolio()
 usdt = portfolio["USDT"]
 

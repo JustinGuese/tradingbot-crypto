@@ -31,6 +31,8 @@ spec:
             env:
               - name: SYMBOLS
                 value: "ETHUSDT,AVAXUSDT,BNBUSDT,XRPUSDT"
+              - name: BOTNAME
+                value: "calcSMARSI"
             volumeMounts:
               - name: smacombinations-rsi
                 mountPath: /results/
