@@ -1,0 +1,23 @@
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rsi-simple-hourly
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: rsi-simple-hourly
+            image: guestros/tradingbot-rsisimple:latest
+            imagePullPolicy: Always
+            env:
+              - name: SYMBOLS
+                value: "ETHUSDT,AVAXUSDT,BNBUSDT,XRPUSDT"
+              - name: BOTNAME
+                value: "RSIsimple"
+          restartPolicy: OnFailure

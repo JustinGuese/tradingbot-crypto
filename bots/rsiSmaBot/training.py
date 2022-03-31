@@ -13,7 +13,7 @@ from multiprocessing import Pool
 from ta.momentum import rsi
 
 
-ti = TradingInteractor(environ["BOTNAME"], url = "10.147.17.73")
+ti = TradingInteractor(environ["BOTNAME"])# , url = "10.147.17.73")
 portfolio = ti.getPortfolio()
 usdt = portfolio["USDT"]
 
