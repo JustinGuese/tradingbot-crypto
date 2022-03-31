@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: trading
+  labels:
+    name: smacombinations-rsi-pv-claim
+  name: smacombinations-rsi-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: complexsmacross-retrain-rsi-hourly
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: complexsmacross-retrain-rsi-hourly
+            image: guestros/tradingbot-retrain-sma-rsi:latest
+            imagePullPolicy: Always
+            env:
+              - name: SYMBOLS
+                value: "ETHUSDT,AVAXUSDT,BNBUSDT,XRPUSDT"
+            volumeMounts:
+              - name: smacombinations-rsi
+                mountPath: /results/
+          restartPolicy: OnFailure
+          volumes:
+            - name: smacombinations-rsi
+              persistentVolumeClaim:
+                claimName: smacombinations-rsi-pv-claim

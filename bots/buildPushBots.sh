@@ -10,3 +10,6 @@ docker push guestros/tradingbot-simplesma-goldencross:latest
 # complexSMA
 docker build -t guestros/tradingbot-retrain-sma:latest ./calculatedSMACross
 docker push guestros/tradingbot-retrain-sma:latest
+# complexSMA + rsi
+docker build -t guestros/tradingbot-retrain-sma-rsi:latest ./rsiSmaBot
+docker push guestros/tradingbot-retrain-sma-rsi:latest

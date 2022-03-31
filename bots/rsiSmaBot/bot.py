@@ -2,6 +2,7 @@ from datetime import datetime
 from training import doTraining, ti
 from os import environ
 from pathlib import Path
+from ta.momentum import rsi
 import pandas as pd
 
 environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
@@ -27,6 +28,7 @@ def checkCross(symbol, smallSMA, bigSMA):
     # 200 hours are 8.33 days
     lookback = int(bigSMA / 24 * 1.25) # add 25% tolerance
     data = ti.getData(symbol, lookback=lookback)
+    data["rsi"] = rsi(data["close"], 14)
     retries = 0
     while len(data) < bigSMA and retries < 3:
         lookback = int(lookback * 1.25)
@@ -43,9 +45,9 @@ def checkCross(symbol, smallSMA, bigSMA):
     # newest values are at the top, little weird
     # check if we have a cross
     print("current position of %s. smallSMA %.2f and bigSMA %.2f is upwardstrend? " % (symbol, data.iloc[-1]['smallSMA'], data.iloc[-1]['bigSMA']), data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA'])
-    if data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] <= data.iloc[-2]['bigSMA']:
+    if data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] <= data.iloc[-2]['bigSMA'] and data.iloc[-1]["rsi"] <= 30:
         return "upcross", True
-    elif data.iloc[-1]['smallSMA'] < data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] >= data.iloc[-2]['bigSMA']:
+    elif data.iloc[-1]['smallSMA'] < data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] >= data.iloc[-2]['bigSMA'] and data.iloc[-1]["rsi"] >= 70:
         return "downcross", False
     else: 
         return "nocross", data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA']
