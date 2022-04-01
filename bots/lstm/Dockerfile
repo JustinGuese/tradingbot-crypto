@@ -5,5 +5,6 @@ RUN mkdir -p /results/
 COPY requirements.txt /
 RUN pip install -r requirements.txt
 COPY training.py /training.py
+COPY ./results/ /results/
 COPY bot.py /bot.py
 CMD ["python", "/bot.py"]

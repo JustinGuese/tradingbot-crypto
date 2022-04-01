@@ -16,3 +16,6 @@ docker push guestros/tradingbot-retrain-sma-rsi:latest
 # basic rsi
 docker build -t guestros/tradingbot-rsisimple:latest ./rsisimplecross
 docker push guestros/tradingbot-rsisimple:latest
+# lstm
+docker build -t guestros/tradingbot-lstmlookback:latest ./lstm
+docker push guestros/tradingbot-lstmlookback:latest
