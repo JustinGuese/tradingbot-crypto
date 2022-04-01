@@ -4,9 +4,13 @@ from os import environ
 from pathlib import Path
 from ta.momentum import rsi
 import pandas as pd
-from training import threeDFy, createModel
+from training import threeDFy, createModel, applyTA
+import tensorflow as tf
+import pickle
+import numpy as np
 
-environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
+# 
+environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT, XRPUSDT" # debug
 SYMBOLS = environ["SYMBOLS"].split(",")
 
 # check if we have to retrain
@@ -16,72 +20,62 @@ with open("./results/lastUpdate.txt", "r") as f:
     if lastTrainingDate.month != datetime.now().month:
         doTraining(SYMBOLS)
 
-def checkCross(symbol, smallSMA, bigSMA):
-    # get data
-    # 24 hours in a day, so to get 200 we need to get the last 200 days
-    # 200 hours are 8.33 days
-    lookback = int(bigSMA / 24 * 1.25) # add 25% tolerance
-    data = ti.getData(symbol, lookback=lookback)
-    data["rsi"] = rsi(data["close"], 14)
-    retries = 0
-    while len(data) < bigSMA and retries < 3:
-        lookback = int(lookback * 1.25)
-        # print("retry lookback: ", lookback)
-        data = ti.getData(symbol, lookback=lookback)
-        retries += 1
-    if retries >= 3:
-        pd.set_option('display.max_colwidth', None)
-        print(lookback)
-        print(data.iloc[0])
-        raise ValueError("max retries exceeded to get data length of df is less than minimum... is: ", len(data))
-    data['smallSMA'] = data["close"].rolling(smallSMA).mean()
-    data['bigSMA'] = data["close"].rolling(bigSMA).mean()
-    # newest values are at the top, little weird
-    # check if we have a cross
-    print("current position of %s. smallSMA %.2f and bigSMA %.2f is upwardstrend? " % (symbol, data.iloc[-1]['smallSMA'], data.iloc[-1]['bigSMA']), data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA'])
-    if data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] <= data.iloc[-2]['bigSMA'] and data.iloc[-1]["rsi"] <= 30:
-        return "upcross", True
-    elif data.iloc[-1]['smallSMA'] < data.iloc[-1]['bigSMA'] and data.iloc[-2]['smallSMA'] >= data.iloc[-2]['bigSMA'] and data.iloc[-1]["rsi"] >= 70:
-        return "downcross", False
-    else: 
-        return "nocross", data.iloc[-1]['smallSMA'] > data.iloc[-1]['bigSMA']
+def loadModelsForSymbols(symbols):
+    storage = dict()
+    for symbol in symbols:
+        tmp = dict()
+        tmp["model"] = tf.keras.models.load_model("./results/mdl_stock_%s.hdf5" % symbol)
+        tmp["scaler"] = pickle.load(open("./results/scaler_stock_%s.pkl" % symbol, "rb"))
+        storage[symbol] = tmp
+    return storage
 
-portfolio = ti.getPortfolio()
-usdt = portfolio["USDT"]
-for i in range(len(combs)):
-    symbol = combs.iloc[i]["symbol"]
-    smallSma = int(combs.iloc[i]["smallSMA"])
-    bigSma = int(combs.iloc[i]["bigSMA"])
+def scale(data, scaler):
+    return scaler.transform(data)
 
-    try:
-        cross, positionUp = checkCross(symbol, smallSma, bigSma)
-        sell = []
-        buy = []
-        if portfolio.get(symbol) is None:
-            if positionUp:
-                print("buying " + symbol)
-                buy.append(symbol)
-                # ti.buy(symbol, usdt / len(SYMBOLS) * 0.95) # buy 95% of usdt / number of symbols
-        else:
-            if not positionUp:
-                # sell
-                nrHolding = portfolio.get(symbol, 0)
-                if nrHolding > 0:
-                    print("selling " + symbol)
-                    # ti.sell(symbol, -1) # sell all we have
-                    sell.append(symbol)
-        # first sell
-        if len(sell) > 0:
-            for symbol in sell:
-                ti.sell(symbol, -1)
-            portfolio = ti.getPortfolio()
-            print(portfolio)
-            usdt = portfolio["USDT"]
-        # then buy
-        if len(buy) > 0:
-            for symbol in buy:
-                ti.buy(symbol, usdt / len(buy) * 0.95)
+def getXFinal(data):
+    x_final = []
+    x_final.append(data[-60:])
+    x_final = tf.convert_to_tensor(x_final, dtype=tf.float32)
+    return x_final
 
-    except Exception as e:
-        print("problem/skip with: " + symbol + " " + str(e))
-        # raise
+
+if __name__ == "__main__":
+    portfolio = ti.getPortfolio()
+    usdt = portfolio["USDT"]
+
+    # load models
+    MODELS = loadModelsForSymbols(SYMBOLS)
+
+    sell = []
+    buy = []
+
+    for symbol in SYMBOLS:
+        # get newest data
+        data = ti.getData(symbol, lookback=30) # not a whole year
+        data = applyTA(data)
+        data = scale(data, MODELS[symbol]["scaler"])
+        x_final = getXFinal(data)
+
+        # let the model predict
+        pred = MODELS[symbol]["model"].predict(x_final)
+        pred = (pred > .5) * 1
+        pred = pred[0][0]
+        # 0 = sell, 1 = buy
+        print("prediction for %s: %s" % (symbol, str(pred)))
+        if pred == 0:
+            sell.append(symbol)
+        elif pred == 1:
+            buy.append(symbol)
+
+    # execute the orders
+    # first sell
+    if len(sell) > 0:
+        for symbol in sell:
+            ti.sell(symbol, -1)
+        portfolio = ti.getPortfolio()
+        print(portfolio)
+        usdt = portfolio["USDT"]
+    # then buy
+    if len(buy) > 0:
+        for symbol in buy:
+            ti.buy(symbol, usdt / len(buy) * 0.95)

@@ -24,7 +24,7 @@ from tensorflow.keras.metrics import AUC,Precision,Recall
 from tensorflow.keras.callbacks import ReduceLROnPlateau,EarlyStopping,ModelCheckpoint
 
 
-ti = TradingInteractor(environ["BOTNAME"], url = "10.147.17.73")# )
+ti = TradingInteractor(environ["BOTNAME"])# )  "10.147.17.73"
 portfolio = ti.getPortfolio()
 usdt = portfolio["USDT"]
 
@@ -160,11 +160,11 @@ def threeDFy(data, traintestsplit = True):
     
     return xtrainshape, x_train, x_test, y_train, y_test, x_final, sc
 
-def createModel(xtrainshape):
+def createModel(xtrainshape, symbol):
     # val_loss
     redlr = ReduceLROnPlateau(monitor="loss",patience=100)
     es = EarlyStopping(monitor="loss",patience=200)
-    mcp_save = ModelCheckpoint('results/mdl_stock.hdf5', save_best_only=True, monitor='val_loss', mode='min')
+    mcp_save = ModelCheckpoint('results/mdl_stock_%s.hdf5' % symbol, save_best_only=True, monitor='val_loss', mode='min')
     classifier = Sequential()
 
     classifier.add(LSTM(units = 200, return_sequences = True, input_shape =xtrainshape))
@@ -184,13 +184,7 @@ def createModel(xtrainshape):
     classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy',metrics=['accuracy']) # y_train[y_train==0.5] = 0
     return classifier, redlr,es,mcp_save
 
-def getBestCombination(symbol):
-    # like training
-    # get data
-    # 24 hours in a day, so to get 200 we need to get the last 200 days
-    # 6 months are 24 * 180 = 4320
-    data = ti.getData(symbol, lookback=4300) # not a whole year
-    # apply all the ta we have
+def applyTA(data):
     data = add_all_ta_features(data, open="open", high= "high", low = "low", close = "close", volume = "volume")
     #we have to define a binary target
     # make moving average
@@ -203,23 +197,34 @@ def getBestCombination(symbol):
     data = data.fillna(method = "bfill")
     data.replace(np.inf, 999, inplace=True)
     data.replace(-np.inf, -999, inplace=True)
+    return data
+
+def getBestCombination(symbol):
+    # like training
+    # get data
+    # 24 hours in a day, so to get 200 we need to get the last 200 days
+    # 6 months are 24 * 180 = 4320
+    data = ti.getData(symbol, lookback=4300) # not a whole year
+    # apply all the ta we have
+    data = applyTA(data)
     # tmp save to disk
-    # data.to_csv("traindata.csv")
+    # data.to_csv("traindata_%s.csv" % symbol)
 
     xtrainshape, x_train, x_test, y_train, y_test, x_final, scaler = threeDFy(data, traintestsplit= True)
     # create model
     print("creating model now...")
-    model, redlr,es,mcp_save = createModel(xtrainshape)
+    # model, redlr,es,mcp_save = createModel(xtrainshape, symbol)
+    model = tf.keras.models.load_model("./results/mdl_stock_%s.hdf5" % symbol)
 
     # train it
     print("training model now...")
     # validation_data=(x_test,y_test)
-    model.fit(x_train,y_train,epochs=1, validation_data=(x_test,y_test), batch_size=256,callbacks=[redlr,es,mcp_save] )
+    model.fit(x_train,y_train,epochs=20, validation_data=(x_test,y_test), batch_size=256 )
 
     # check results
     # classification report
     pred_train = (model.predict(x_train) > .5) * 1
-    # pred_train = model.predict(x_train)
+    pred_train = model.predict(x_train)
     # print(type(pred_train))
     # format is actually [ [0],[0]]
     # print("predtrain: ", pred_train)
@@ -235,12 +240,15 @@ def doTraining(SYMBOLS):
     currentBest = []
     for symbol in tqdm(SYMBOLS):
         # get training best combination if not exists
-        getBestCombination(symbol)
+        try:
+            getBestCombination(symbol)
+        except Exception as e:
+            print(e)
     # and save last update
     with open("results/lastUpdate.txt", "w") as f:
         f.write(str(datetime.now()))
 
 if __name__ == "__main__":
-    environ["SYMBOLS"] = "AVAXUSDT" # ,BNBUSDT,ETHUSDT,XRPUSDT" # debug
+    environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
     SYMBOLS = environ["SYMBOLS"].split(",")
     doTraining(SYMBOLS)

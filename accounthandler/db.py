@@ -78,6 +78,7 @@ class CoinGeckoTrending(Base):
     marketcaprank = Column(Integer)
 
 class PortfolioTracker(Base):
+    __tablename__ = "portfoliotracker"
     id = Column(Integer, primary_key=True, index=True)
     accountname = Column(String())
     portfolioworth = Column(Float)
