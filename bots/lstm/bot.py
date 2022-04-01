@@ -1,19 +1,24 @@
 from datetime import datetime
 from training import doTraining, ti, applyTA
 from os import environ
-from pathlib import Path
 from ta.momentum import rsi
-import pandas as pd
 import pickle
 import numpy as np
 import json
 from tqdm import tqdm
+from pathlib import Path
+from subprocess import call
+
 
 # 
 environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
 SYMBOLS = environ["SYMBOLS"].split(",")
 
 # check if we have to retrain
+if not Path("./results/lastUpdate.txt").is_file():
+    print("!! first startup, need to copy all from resultsfirst directory into results")
+    call("rsync -r ./resultsfirst/ ./results/", shell=True)
+
 with open("./results/lastUpdate.txt", "r") as f:
     # check if retraining required
     lastTrainingDate = datetime.strptime(f.read(), "%Y-%m-%d %H:%M:%S.%f")
