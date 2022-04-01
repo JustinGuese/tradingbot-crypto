@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: randombot-hourly
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: randombot-hourly
+            image: guestros/tradingbot-randombenchmark:latest
+            imagePullPolicy: Always
+            env:
+              - name: SYMBOLS
+                value: "ETHUSDT,AVAXUSDT,BNBUSDT,XRPUSDT"
+              - name: BOTNAME
+                value: "randombot"
+          restartPolicy: OnFailure

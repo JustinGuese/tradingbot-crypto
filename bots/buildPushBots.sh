@@ -19,3 +19,6 @@ docker push guestros/tradingbot-rsisimple:latest
 # lstm
 docker build -t guestros/tradingbot-lstmlookback:latest ./lstm
 docker push guestros/tradingbot-lstmlookback:latest
+# randombot
+docker build -t guestros/tradingbot-randombenchmark:latest ./randombenchmarkbot
+docker push guestros/tradingbot-randombenchmark:latest
