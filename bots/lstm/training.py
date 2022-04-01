@@ -12,6 +12,7 @@ from tqdm import tqdm
 from datetime import datetime
 from multiprocessing import Pool
 from ta import add_all_ta_features
+from ta.momentum import rsi
 import tensorflow as tf # This code has been tested with TensorFlow 1.6
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import classification_report
@@ -22,6 +23,7 @@ from tensorflow.keras.layers import LSTM
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.metrics import AUC,Precision,Recall
 from tensorflow.keras.callbacks import ReduceLROnPlateau,EarlyStopping,ModelCheckpoint
+import json
 
 
 ti = TradingInteractor(environ["BOTNAME"])# )  "10.147.17.73"
@@ -101,7 +103,7 @@ def oneSimulation(comb_tuple):
 
 def threeDFy(data, traintestsplit = True): 
     if traintestsplit:   
-        split = int(len(data) * 0.9)
+        split = int(len(data) * 0.9999999999) # fake split
         train_data = data.iloc[:split]
         test_data = data.iloc[split:]
     else:
@@ -142,15 +144,15 @@ def threeDFy(data, traintestsplit = True):
     print(x_test.shape,x_train.shape,y_train.shape,y_test.shape,x_final.shape)
     xtrainshape = (x_train.shape[1], x_train.shape[2])
     # then shuffle array for increased randomness
-    traini = np.arange(x_train.shape[0])
-    np.random.shuffle(traini)
-    x_train = x_train[traini]
-    y_train = y_train[traini]
-    if traintestsplit:
-        testi = np.arange(x_test.shape[0])
-        np.random.shuffle(testi)
-        x_test = x_test[testi]
-        y_test = y_test[testi]
+    # traini = np.arange(x_train.shape[0])
+    # np.random.shuffle(traini)
+    # x_train = x_train[traini]
+    # y_train = y_train[traini]
+    # if traintestsplit:
+    #     testi = np.arange(x_test.shape[0])
+    #     np.random.shuffle(testi)
+    #     x_test = x_test[testi]
+    #     y_test = y_test[testi]
     # i think we need to convert to tensor
     x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
     x_test = tf.convert_to_tensor(x_test, dtype=tf.float32)
@@ -199,7 +201,49 @@ def applyTA(data):
     data.replace(-np.inf, -999, inplace=True)
     return data
 
-def getBestCombination(symbol):
+def oneSimulation(data, predictions, predlookback):
+    startMoney = 10000
+    money = startMoney
+    stocks = 0
+    rsidata = rsi(data["close"], 14) # 3 should equal close?
+    for i in range(predlookback, len(predictions)):
+        crntPrice = data.iloc[i]["close"]
+        predicts = predictions[i-predlookback:i]
+        rsinow = rsidata[i]
+        prediction = np.median(predicts)
+        if prediction == 1 and rsinow <= 30:
+            # simulate buy
+            if money > 10 and stocks == 0:
+                amount = money / crntPrice * .95
+                cost = amount * crntPrice * 1.00025 # commission
+                money -= cost
+                stocks = amount
+        elif prediction == 0 and rsinow >= 70:
+            # simulate sell
+            if stocks > 0:
+                cost = stocks * crntPrice * (1 - 0.00025) # commission
+                money += cost
+                stocks = 0
+    # if done sell if we still have stock
+    if stocks > 0:
+        cost = stocks * crntPrice * (1 - 0.00025) # commission
+        money += cost
+        stocks = 0
+    return money - startMoney
+
+def optimizeLookback(data, predictions):
+    bestWin = -999999999999999999999999
+    bestLookback = -1
+    for lookback in [1,5,10,50,100, 300, 500]:
+        win = oneSimulation(data, predictions, lookback)
+        if win > bestWin:
+            bestWin = win
+            bestLookback = lookback
+    timeMonths = len(data) / 24 / 30
+    return bestWin, bestLookback, timeMonths
+
+
+def doOneTraining(symbol, epochs = 20):
     # like training
     # get data
     # 24 hours in a day, so to get 200 we need to get the last 200 days
@@ -219,12 +263,12 @@ def getBestCombination(symbol):
     # train it
     print("training model now...")
     # validation_data=(x_test,y_test)
-    model.fit(x_train,y_train,epochs=20, validation_data=(x_test,y_test), batch_size=256 )
+    # model.fit(x_train,y_train,epochs=epochs, validation_data=(x_test,y_test), batch_size=1024 )
 
     # check results
     # classification report
     pred_train = (model.predict(x_train) > .5) * 1
-    pred_train = model.predict(x_train)
+    # pred_train = model.predict(x_train)
     # print(type(pred_train))
     # format is actually [ [0],[0]]
     # print("predtrain: ", pred_train)
@@ -236,19 +280,32 @@ def getBestCombination(symbol):
     model.save("results/mdl_stock_%s.hdf5" % symbol)
     pickle.dump(scaler, open("results/scaler_stock_%s.pkl" % symbol, "wb"))
 
-def doTraining(SYMBOLS):
+    # finally find best lookback period
+    bestWin, bestLookback, timeMonths = optimizeLookback(data, pred_train)
+    # tryna calculate win pct per year
+    mult = timeMonths / 12
+    winPctYear = (10000 + bestWin / mult) / 10000 * 100
+    return bestWin, bestLookback, timeMonths, winPctYear
+
+def doTraining(SYMBOLS, epochs = 20):
     currentBest = []
+    bestLookbacks = dict()
     for symbol in tqdm(SYMBOLS):
         # get training best combination if not exists
         try:
-            getBestCombination(symbol)
+            bestWin, bestLookback, timeMonths, winPctYear = doOneTraining(symbol, epochs = epochs)
+            print("best simulated win for %s is %.2f$ or %.1f pct/year in %.2f months with lookback %d" % (symbol, bestWin, winPctYear, timeMonths, bestLookback))
+            bestLookbacks[symbol] = bestLookback
         except Exception as e:
             print(e)
+            raise
     # and save last update
     with open("results/lastUpdate.txt", "w") as f:
         f.write(str(datetime.now()))
+    with open("results/bestLookbacks.json", "w") as f:
+        json.dump(bestLookbacks, f, indent = 4)
 
 if __name__ == "__main__":
     environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
     SYMBOLS = environ["SYMBOLS"].split(",")
-    doTraining(SYMBOLS)
+    doTraining(SYMBOLS, epochs = 1)
