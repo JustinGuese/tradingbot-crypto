@@ -1,0 +1,33 @@
+version: "3"
+services:
+  aperank:
+    image: guestros/tradingbot-aperanksimple:latest 
+    build: ./aperankbot
+
+  coingecko:
+    image: guestros/tradingbot-coingeckotrending:latest 
+    build: ./coingeckoRankDaily
+  
+  goldencross:
+    image: guestros/tradingbot-simplesma-goldencross:latest 
+    build: ./simpleSMACross
+
+  complexSMA:
+    image: guestros/tradingbot-retrain-sma:latest 
+    build: ./calculatedSMACross
+
+  complexSMARSI:
+    image: guestros/tradingbot-retrain-sma-rsi:latest 
+    build: ./rsiSmaBot
+
+  simplersi:
+    image: guestros/tradingbot-rsisimple:latest 
+    build: ./rsisimplecross
+
+  lstm:
+    image: guestros/tradingbot-lstmlookback:latest 
+    build: ./lstm
+
+  random: 
+    image: guestros/tradingbot-randombenchmark:latest 
+    build: ./randombenchmarkbot
