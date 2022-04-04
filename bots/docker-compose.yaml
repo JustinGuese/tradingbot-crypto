@@ -35,3 +35,7 @@ services:
   recentTradesLstm:
     image: guestros/tradingbot-recentrades-lstm:latest
     build: ./lstm-recenttrades
+
+  recentTradesSklearn:
+    image: guestros/tradingbot-recenttrades-sklearn:latest
+    build: ./recentTradesMinimal

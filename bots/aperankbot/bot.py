@@ -22,7 +22,8 @@ for position in portfolio:
         print("trying to sell: ", position)
         ti.sell(position, -1)
 # then get new volume
-ti.portfolio = None # force new download
+# ti.portfolio = None # force new download
+portf = ti.getPortfolio()
 usdt = ti.getUSD()
 print("i have %.2f $ to spend" % usdt)
 nrPurchases = 0 # max 10
