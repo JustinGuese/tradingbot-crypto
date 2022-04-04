@@ -97,15 +97,15 @@ if __name__ == "__main__":
                 if portfolio.get(symbol, 0) == 0:
                     buy.append(symbol)
 
-        # execute the orders
-        # first sell
-        if len(sell) > 0:
-            for symbol in sell:
-                ti.sell(symbol, -1)
-            portfolio = ti.getPortfolio()
-            print(portfolio)
-            usdt = portfolio["USDT"]
-        # then buy
-        if len(buy) > 0:
-            for symbol in buy:
-                ti.buy(symbol, usdt / len(buy) * 0.95)
+    # execute the orders
+    # first sell
+    if len(sell) > 0:
+        for symbol in sell:
+            ti.sell(symbol, -1)
+        portfolio = ti.getPortfolio()
+        print(portfolio)
+        usdt = portfolio["USDT"]
+    # then buy
+    if len(buy) > 0:
+        for symbol in buy:
+            ti.buy(symbol, usdt / len(buy) * 0.95)

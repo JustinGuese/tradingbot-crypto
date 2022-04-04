@@ -373,9 +373,9 @@ def feargreedindex(lookbackdays: int = 1, db: Session = Depends(get_db)):
 def binancerecenttrades(symbol: str, lookbackdays: int = -1, db: Session = Depends(get_db)):
     if lookbackdays == -1:
         # get all the data we have
-        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).all()
+        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).order_by(BinanceRecentTrade.id.desc()).all()
     else:
-        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).filter(BinanceRecentTrade.time > datetime.utcnow() - timedelta(days=lookbackdays)).all()
+        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).filter(BinanceRecentTrade.time > datetime.utcnow() - timedelta(days=lookbackdays)).order_by(BinanceRecentTrade.id.desc()).all()
     return res
 
 if __name__ == "__main__":

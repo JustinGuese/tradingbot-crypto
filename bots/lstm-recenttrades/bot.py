@@ -11,7 +11,7 @@ from subprocess import call
 
 
 # 
-environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
+# environ["SYMBOLS"] = "AVAXUSDT,BNBUSDT,ETHUSDT,XRPUSDT" # debug
 SYMBOLS = environ["SYMBOLS"].split(",")
 
 # check if we have to retrain
@@ -48,7 +48,7 @@ def get3dxtrain(data):
     window = 60
     target = -1 # -1 should be ma5_win, change indicator bla bla 
     for i in range(window, len(data)):
-        x_train.append(data[i-window:i])
+        x_train.append(data[i-window:i, :-1])
         y_train.append(data[i, target]) 
     x_train, y_train = np.array(x_train), np.array(y_train)
     
@@ -69,43 +69,44 @@ if __name__ == "__main__":
 
     for symbol in tqdm(SYMBOLS):
         # get newest data
-        data = ti.getData(symbol, lookback=30) # not a whole year
-        rsidata = rsi(data["close"], 14)
-        if rsidata[-1] <= 30 or rsidata[-1] >= 70: # only conditions on when we have to act
-            if MODELS is None:
-                # just load them now
-                import tensorflow as tf
-                MODELS = loadModelsForSymbols(SYMBOLS)
-            data = applyTA(data)
-            datascaled = scale(data, MODELS[symbol]["scaler"])
-            x_train = get3dxtrain(datascaled)
+        data = ti.getBinanceRecentTrades(symbol, lookbackdays=1)
+        # switch order bc we want newest at bottom
+        data = data.iloc[::-1]
+        # rsidata = rsi(data["close"], 14)
+        if MODELS is None:
+            # just load them now
+            import tensorflow as tf
+            MODELS = loadModelsForSymbols(SYMBOLS)
+        data = applyTA(data)
+        datascaled = scale(data, MODELS[symbol]["scaler"])
+        x_train = get3dxtrain(datascaled)
 
-            # let the model predict
-            pred = MODELS[symbol]["model"].predict(x_train)
-            pred = (pred > .5) * 1
-            # now lookback in action
-            lookback = BESTLOOKBACKS[symbol]
-            pred = pred[-lookback:]
-            pred = np.median(pred)
-            # 0 = sell, 1 = buy
-            print("prediction for %s: %s" % (symbol, str(pred)))
+        # let the model predict
+        pred = MODELS[symbol]["model"].predict(x_train)
+        pred = (pred > .5) * 1
+        # now lookback in action
+        lookback = BESTLOOKBACKS[symbol]
+        pred = pred[-lookback:]
+        pred = np.median(pred)
+        # 0 = sell, 1 = buy
+        print("prediction for %s: %s" % (symbol, str(pred)))
 
-            if pred == 0:
-                if portfolio.get(symbol, 0) > 0:
-                    sell.append(symbol)
-            elif pred == 1:
-                if portfolio.get(symbol, 0) == 0:
-                    buy.append(symbol)
+        if pred == 0:
+            if portfolio.get(symbol, 0) > 0:
+                sell.append(symbol)
+        elif pred == 1:
+            if portfolio.get(symbol, 0) == 0:
+                buy.append(symbol)
 
-        # execute the orders
-        # first sell
-        if len(sell) > 0:
-            for symbol in sell:
-                ti.sell(symbol, -1)
-            portfolio = ti.getPortfolio()
-            print(portfolio)
-            usdt = portfolio["USDT"]
-        # then buy
-        if len(buy) > 0:
-            for symbol in buy:
-                ti.buy(symbol, usdt / len(buy) * 0.95)
+    # execute the orders
+    # first sell
+    if len(sell) > 0:
+        for symbol in sell:
+            ti.sell(symbol, -1)
+        portfolio = ti.getPortfolio()
+        print(portfolio)
+        usdt = portfolio["USDT"]
+    # then buy
+    if len(buy) > 0:
+        for symbol in buy:
+            ti.buy(symbol, usdt / len(buy) * 0.95)

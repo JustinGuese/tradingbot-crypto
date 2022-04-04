@@ -16,6 +16,8 @@ from ta.momentum import rsi
 import tensorflow as tf # This code has been tested with TensorFlow 1.6
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import classification_report
+from pathlib import Path
+
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -59,49 +61,7 @@ def sellSim(tmpdata, trades, money, nrStocks, i, boughtFor, boughtAtI):
         trades.append(profit / heldfor) # profit per day helt for
     return trades, nrStocks, money
 
-def oneSimulation(comb_tuple):
-    data, smallSMA, bigSMA = comb_tuple
-    tmpdata = data.copy()
-    tmpdata['smaSmall'] = tmpdata["price"].rolling(smallSMA).mean()
-    tmpdata['smaBig'] = tmpdata["price"].rolling(bigSMA).mean()
-    nrStocks = 0
-    startingMoney = 10000 # 10 k starting
-    money = startingMoney #  10k starting
-    boughtFor = 0
-    boughtAtI = 0
-    trades = []
-    for i in range(len(data)):
-        SMASmall, SMABig, rsi = tmpdata.iloc[i]['smaSmall'], tmpdata.iloc[i]['smaBig'], tmpdata.iloc[i]['rsi']
-        if SMASmall > SMABig and nrStocks == 0 and rsi <= 30:
-            # buy
-            boughtFor, boughtAtI, money, nrStocks = buySim(tmpdata, money, nrStocks, i)
-
-        elif SMASmall < SMABig and nrStocks > 0 and rsi >= 70:
-            # sell
-            trades, nrStocks, money = sellSim(tmpdata, trades, money, nrStocks, i, boughtFor, boughtAtI)
-    # on last day sell if we have stocks
-    if nrStocks > 0:
-        trades, nrStocks, money = sellSim(tmpdata, trades, money, nrStocks, i, boughtFor, boughtAtI)
-    
-    totalWin = (money - startingMoney) / len(data) # to average it to the timestep
-    # avg/median Trade per timestep (hour)
-    if len(trades) > 0:
-        avgTrade = np.mean(trades)
-        medTrade = np.median(trades)
-    else:
-        avgTrade = 0
-        medTrade = 0
-
-    # we are working with hour data on crypto, so i wanna take it * 24 * 30 to get monthly averages
-    totalWin *= 24 * 30
-    pctWinPerMonth = totalWin / startingMoney * 100
-    pctWinPerYear = pctWinPerMonth * 12 # 12 months
-    avgTrade *= 24 * 30
-    medTrade *= 24 * 30 
-    nrTrades = len(trades)
-    return smallSMA, bigSMA, round(totalWin, 2), round(pctWinPerMonth, 2), round(pctWinPerYear, 2), round(avgTrade, 2), round(medTrade, 2), nrTrades
-
-def threeDFy(data, traintestsplit = True): 
+def threeDFy(data, scaler = None, traintestsplit = True): 
     if traintestsplit:   
         split = int(len(data) * 0.9999999999) # fake split
         train_data = data.iloc[:split]
@@ -110,7 +70,10 @@ def threeDFy(data, traintestsplit = True):
         train_data = data
 
     # scaling
-    sc = MinMaxScaler(feature_range = (0, 1))
+    if scaler == None:
+        sc = MinMaxScaler(feature_range = (0, 1))
+    else:
+        sc = scaler
     train_data = sc.fit_transform(train_data)
     if traintestsplit:
         test_data = sc.transform(test_data)
@@ -123,13 +86,13 @@ def threeDFy(data, traintestsplit = True):
     window = 60
     target = -1 # -1 should be ma5_win, change indicator bla bla 
     for i in range(window, len(train_data)):
-        x_train.append(train_data[i-window:i])
+        x_train.append(train_data[i-window:i, :-1]) # we dont wanna take target, bc we take info 
         y_train.append(train_data[i, target]) 
     x_train, y_train = np.array(x_train), np.array(y_train)
     # test data
     if traintestsplit:
         for i in range(window, len(test_data)):
-            x_test.append(test_data[i-window:i])
+            x_test.append(test_data[i-window:i, :-1])
             y_test.append(test_data[i, target])
     x_test, y_test = np.array(x_test), np.array(y_test)
     #final pred
@@ -191,12 +154,14 @@ def applyTA(data):
     #we have to define a binary target
     # make moving average
     # data['SMA3price'] = data["price"].rolling(window=3).mean()
-    data['pricepct'] = np.sign(data['price'].pct_change())
-    data["pricepct"] = data["pricepct"].shift(-1)
-    data["pricepct"] = data["pricepct"].replace(0, 1) # no hodl just buy
-    # 3dfy it
-    data = data.drop(["symbol"], axis = 1)
+    data['pricepct'] = data['price'].pct_change()
+    data['pricesign'] = np.sign(data['price'].pct_change())
+    # data["target"] = data["pricepct"].shift(-1) # i think we cant do shift, bc that would take the info from the next day
     data = data.fillna(method = "bfill")
+    data["target"] = data["pricesign"].replace(0, None) # so we can exchange it with clostest next one
+    # 3dfy it
+    data = data.drop(["symbol", "time"], axis = 1)
+    data = data.fillna(method = "ffill")
     data.replace(np.inf, 999, inplace=True)
     data.replace(-np.inf, -999, inplace=True)
     return data
@@ -205,20 +170,20 @@ def oneSimulation(data, predictions, predlookback):
     startMoney = 10000
     money = startMoney
     stocks = 0
-    rsidata = rsi(data["price"], 14) # 3 should equal close?
+    # rsidata = rsi(data["price"], 14) # 3 should equal close?
     for i in range(predlookback, len(predictions)):
         crntPrice = data.iloc[i]["price"]
         predicts = predictions[i-predlookback:i]
-        rsinow = rsidata[i]
+        # rsinow = rsidata[i]
         prediction = np.median(predicts)
-        if prediction == 1 and rsinow <= 30:
+        if prediction == 1:
             # simulate buy
             if money > 10 and stocks == 0:
                 amount = money / crntPrice * .95
                 cost = amount * crntPrice * 1.00025 # commission
                 money -= cost
                 stocks = amount
-        elif prediction == 0 and rsinow >= 70:
+        elif prediction == 0:
             # simulate sell
             if stocks > 0:
                 cost = stocks * crntPrice * (1 - 0.00025) # commission
@@ -248,22 +213,36 @@ def doOneTraining(symbol, epochs = 20):
     # get data
     # 24 hours in a day, so to get 200 we need to get the last 200 days
     # 6 months are 24 * 180 = 4320
-    data = ti.getData(symbol, lookback=4300) # not a whole year
+    # data = ti.getData(symbol, lookback=4300) # not a whole year
+    data = ti.getBinanceRecentTrades(symbol, lookbackdays=-1)
+    # switch order bc we want newest at bottom
+    data = data.iloc[::-1]
     # apply all the ta we have
     data = applyTA(data)
     # tmp save to disk
-    # data.to_csv("traindata_%s.csv" % symbol)
+    data.to_csv("traindata_%s.csv" % symbol)
 
-    xtrainshape, x_train, x_test, y_train, y_test, x_final, scaler = threeDFy(data, traintestsplit= True)
+    # check if we have a scaler
+    scalerfilename = "results/scaler_stock_%s.pkl" % symbol
+    if Path(scalerfilename).is_file():
+        scaler = pickle.load(open(scalerfilename, "rb"))
+    else:
+        scaler = None
+    xtrainshape, x_train, x_test, y_train, y_test, x_final, scaler = threeDFy(data, scaler = scaler, traintestsplit= True)
     # create model
     print("creating model now...")
-    # model, redlr,es,mcp_save = createModel(xtrainshape, symbol)
-    model = tf.keras.models.load_model("./results/mdl_stock_%s.hdf5" % symbol)
+    modelfilename = "results/mdl_stock_%s.hdf5" % symbol
+    if Path(modelfilename).is_file():
+        model = tf.keras.models.load_model("./results/mdl_stock_%s.hdf5" % symbol)
+    else:
+        print("no model fou! creating new")
+        model, redlr,es,mcp_save = createModel(xtrainshape, symbol)
+
 
     # train it
     print("training model now...")
     # validation_data=(x_test,y_test)
-    # model.fit(x_train,y_train,epochs=epochs, validation_data=(x_test,y_test), batch_size=1024 )
+    model.fit(x_train,y_train,epochs=epochs, validation_data=(x_test,y_test), batch_size=256 )
 
     # check results
     # classification report
@@ -273,8 +252,9 @@ def doOneTraining(symbol, epochs = 20):
     # format is actually [ [0],[0]]
     # print("predtrain: ", pred_train)
     # pred_train = [x[0] for x in pred_train]
+    print("predictions what it should be: ", np.unique(y_train, return_counts=True))
     print("predictions: ", np.unique(pred_train, return_counts=True))
-    cr = classification_report(y_train, pred_train, target_names=["sell","buy"])
+    cr = classification_report(y_train, pred_train, target_names=["sell", "buy"])
     print("TRAIN CR" ,cr)
 
     model.save("results/mdl_stock_%s.hdf5" % symbol)
