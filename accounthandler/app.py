@@ -314,6 +314,8 @@ def __sell(name, symbol, amount, amountInUSD, db):
     win = amount * currentPrice * (1 - COMMISSION)
     account.portfolio[symbol] = amountSymbol - amount
     account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
+    if account.portfolio[symbol] == 0:
+        del account.portfolio[symbol]
     # account.portfolio = account.portfolio
     db.merge(account)
     db.commit()

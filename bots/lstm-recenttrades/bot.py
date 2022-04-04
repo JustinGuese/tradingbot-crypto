@@ -67,46 +67,55 @@ if __name__ == "__main__":
     sell = []
     buy = []
 
-    for symbol in tqdm(SYMBOLS):
-        # get newest data
-        data = ti.getBinanceRecentTrades(symbol, lookbackdays=1)
-        # switch order bc we want newest at bottom
-        data = data.iloc[::-1]
-        # rsidata = rsi(data["close"], 14)
-        if MODELS is None:
-            # just load them now
-            import tensorflow as tf
-            MODELS = loadModelsForSymbols(SYMBOLS)
-        data = applyTA(data)
-        datascaled = scale(data, MODELS[symbol]["scaler"])
-        x_train = get3dxtrain(datascaled)
+    while True:
+        for symbol in tqdm(SYMBOLS):
+            # get newest data
+            data = ti.getBinanceRecentTrades(symbol, lookbackdays=1)
+            # switch order bc we want newest at bottom
+            try:
+                data = data.iloc[::-1]
+            except AttributeError as e:
+                print("problem with data retunred: ", data)
+                raise
+            # rsidata = rsi(data["close"], 14)
+            if MODELS is None:
+                # just load them now
+                import tensorflow as tf
+                MODELS = loadModelsForSymbols(SYMBOLS)
+            data = applyTA(data)
+            datascaled = scale(data, MODELS[symbol]["scaler"])
+            x_train = get3dxtrain(datascaled)
 
-        # let the model predict
-        pred = MODELS[symbol]["model"].predict(x_train)
-        pred = (pred > .5) * 1
-        # now lookback in action
-        lookback = BESTLOOKBACKS[symbol]
-        pred = pred[-lookback:]
-        pred = np.median(pred)
-        # 0 = sell, 1 = buy
-        print("prediction for %s: %s" % (symbol, str(pred)))
+            # let the model predict
+            pred = MODELS[symbol]["model"].predict(x_train)
+            pred = (pred > .5) * 1
+            # now lookback in action
+            lookback = BESTLOOKBACKS[symbol]
+            pred = pred[-lookback:]
+            pred = np.median(pred)
+            # 0 = sell, 1 = buy
+            print("prediction for %s: %s" % (symbol, str(pred)))
 
-        if pred == 0:
-            if portfolio.get(symbol, 0) > 0:
-                sell.append(symbol)
-        elif pred == 1:
-            if portfolio.get(symbol, 0) == 0:
-                buy.append(symbol)
+            if pred == 0:
+                if portfolio.get(symbol, 0) > 0:
+                    sell.append(symbol)
+            elif pred == 1:
+                if portfolio.get(symbol, 0) == 0:
+                    buy.append(symbol)
 
-    # execute the orders
-    # first sell
-    if len(sell) > 0:
-        for symbol in sell:
-            ti.sell(symbol, -1)
-        portfolio = ti.getPortfolio()
-        print(portfolio)
-        usdt = portfolio["USDT"]
-    # then buy
-    if len(buy) > 0:
-        for symbol in buy:
-            ti.buy(symbol, usdt / len(buy) * 0.95)
+        # execute the orders
+        # first sell
+        if len(sell) > 0:
+            for symbol in sell:
+                print("selling %s" % symbol)
+                ti.sell(symbol, -1)
+            portfolio = ti.getPortfolio()
+            print(portfolio)
+            usdt = portfolio["USDT"]
+        # then buy
+        if len(buy) > 0:
+            for symbol in buy:
+                print("buying %s" % symbol)
+                ti.buy(symbol, usdt / len(buy) * 0.95)
+
+

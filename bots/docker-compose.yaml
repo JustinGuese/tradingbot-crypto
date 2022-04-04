@@ -31,3 +31,7 @@ services:
   random: 
     image: guestros/tradingbot-randombenchmark:latest 
     build: ./randombenchmarkbot
+  
+  recentTradesLstm:
+    image: guestros/tradingbot-recentrades-lstm:latest
+    build: ./lstm-recenttrades
