@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dailyupdate-cronjob
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "30 12 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: trading-dailyupdate
+            image: alpine/curl
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - curl -X 'GET' 'http://192.168.178.36:30002/update/daily/'
+          restartPolicy: OnFailure
