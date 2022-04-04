@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: superset-vc
+  namespace: trading
+  labels:
+    app: superset
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: trading
+  labels:
+    service: app-superset
+  name: superset
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      containers:
+        - image: buchingerwilhelmi/apache-superset:latest
+          name: superset
+          imagePullPolicy: "Always"
+          ports:
+            - containerPort: 8088
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: 15m
+            # limits:
+            #   memory: "200Mi"
+            #   cpu: 100m
+          volumeMounts:
+            - mountPath: /app/superset_home/
+              name: superset-v
+      restartPolicy: Always
+      volumes:
+        - name: superset-v
+          persistentVolumeClaim:
+            claimName: superset-vc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: superset
+  namespace: trading
+  name: superset-service
+spec:
+  type: NodePort
+  ports:
+    - port: 8088
+      targetPort: 8088
+      nodePort: 30003
+  selector:
+    app: superset
+

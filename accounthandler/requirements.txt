@@ -5,3 +5,4 @@ uvicorn[standard]
 python-binance
 python-dotenv
 pandas
+beautifulsoup4

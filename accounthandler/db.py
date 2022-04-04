@@ -84,6 +84,17 @@ class PortfolioTracker(Base):
     portfolioworth = Column(Float)
     timestamp = Column(DateTime)
 
+class FearGreedIndex(Base):
+    __tablename__ = "marketinfo_feargreedindex"
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime)
+    # "now", "yesterday", "1weekago", "1monthago", "1yearago"
+    now = Column(Integer)
+    yesterday = Column(Integer)
+    weekago = Column(Integer)
+    monthago = Column(Integer)
+    yearago = Column(Integer)
+
 # pydantic models
 
 class AccountPD(BaseModel):

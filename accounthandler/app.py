@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
     Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending, \
-        PortfolioTracker
+        PortfolioTracker, FearGreedIndex
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 import uvicorn
 from hashlib import sha512
 import json
+from urllib.request import urlopen, Request
+from bs4 import BeautifulSoup
+import re
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,7 +34,7 @@ def get_db():
 app = FastAPI()
 
 binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
-environ["SYMBOLS"] = "BTC,ETH,MATIC,POL,AVAX,XRP,BNB,LINK,ADA"
+environ["SYMBOLS"] = "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
 SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
@@ -146,10 +149,10 @@ def update(db):
     for symbol in SYMBOLS:
         try:
             histDF = getHistoricPrices(symbol)
+            savePrice2DB(histDF, db)
         except Exception as e:
             print("problem with symbol " + symbol  + ": " + str(e))
             continue
-        savePrice2DB(histDF, db)
 
 # 
 def __updatePortfolioWorth(db):
@@ -169,7 +172,7 @@ def __updatePortfolioWorth(db):
         account.lastUpdateWorth = datetime.utcnow()
         db.commit()
         # next add it to the portfolio db
-        pt = PortfolioTracker(account.name, account.netWorth, datetime.utcnow())
+        pt = PortfolioTracker(accountname = str(account.name), portfolioworth = float(account.netWorth), timestamp = datetime.utcnow())
         db.add(pt)
         db.commit()
 
@@ -237,6 +240,10 @@ def hourlyUpdate(db: Session = Depends(get_db)):
     update(db) # prices update hourly
     apewisdom(db)
     __updatePortfolioWorth(db)
+
+@app.get("/update/daily/")
+def dailyUpdate(db: Session = Depends(get_db)):
+    cnnextract(db)
 
 @app.get("/apewisdom/{ticker}/{lookback}")
 def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
@@ -326,6 +333,36 @@ def emergencyLiquidate(name: str, db: Session = Depends(get_db)):
             _ = __sell(name, symbol, -1, False, db)
     return account
 
+def cnnextract(db):
+    cnn = "https://money.cnn.com/data/fear-and-greed/"
+    req = Request(url=cnn, headers = {"user-agent": "my-app/0.0.1"})
+
+    response = urlopen(req)
+    feargreedindex = dict()
+
+    html = BeautifulSoup(response, features="html.parser")
+
+    feargreedindex = html.find(id="needleChart")
+
+    datarows = feargreedindex.findAll("li")
+    datarows = [int(re.findall(r'[0-9]+', str(x))[-1]) for x in datarows]
+
+    # print(datarows)
+    datarows = [datetime.utcnow()] + datarows 
+    #     id = Column(Integer, primary_key=True, index=True)
+    # timestamp = Column(DateTime)
+    # # "now", "yesterday", "1weekago", "1monthago", "1yearago"
+    # now = Column(Integer)
+    # yesterday = Column(Integer)
+    # weekago = Column(Integer)
+    # monthago = Column(Integer)
+    # yearago = Column(Integer)
+    df = pd.DataFrame([datarows], columns=["timestamp", "now", "yesterday", "weekago", "monthago", "yearago"])
+    
+    # then write to db
+    fgiobj = FearGreedIndex(**df.iloc[0].to_dict())
+    db.merge(fgiobj)
+    db.commit()
 
 
 if __name__ == "__main__":
