@@ -239,13 +239,25 @@ def apewisdom(db):
         db.merge(obj)
     db.commit()
 
-@app.get("/data/apewisdom/{ticker}/{lookback}")
+@app.get("/data/apewisdom/{ticker}/{lookback}", tags = ["data"])
 def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).all()
 
-@app.get("/data/apewisdom/")
+@app.get("/data/apewisdom/", tags = ["data"])
 def apewisdomGetAll(db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(hours = 1.5)).all()
+
+@app.get("/data/feargreed/{lookback}", tags = ["data"])
+def cnnsentiment(lookback: int = 1, db: Session = Depends(get_db)):
+    return db.query(FearGreedIndex).filter(FearGreedIndex.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).order_by(FearGreedIndex.timestamp.desc()).all()
+
+@app.get("/data/stock/{symbol}/{lookback}", tags = ["data", "stock"])
+def getStockData(symbol: str, lookback: int = 1, db: Session = Depends(get_db)):
+    return db.query(StockData).filter(StockData.symbol == symbol).filter(StockData.date > datetime.utcnow() - pd.Timedelta(days = lookback)).order_by(StockData.date.desc()).all()
+
+@app.get("/data/stock/tasummary/{symbol}/{lookback}",  tags = ["data", "stock"])
+def getTASummary(symbol: str, lookback: int = 1, db: Session = Depends(get_db)):
+    return db.query(TASummary).filter(TASummary.symbol == symbol).filter(TASummary.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).order_by(TASummary.timestamp.desc()).all()
 
 ## stock data functions
 # @app.get("/data/updatestocks/")
@@ -287,7 +299,7 @@ def taUpdateStocks(db):
     db.commit()
 
 # get price data
-@app.get("/data/priceHistoric/{symbol}/{lookbackdays}")
+@app.get("/data/priceHistoric/{symbol}/{lookbackdays}", tags = ["data"])
 def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(get_db)):
     lookback = datetime.utcnow() - timedelta(days=lookbackdays)
     hist = db.query(PriceHistory).filter(PriceHistory.symbol == symbol).filter(PriceHistory.opentime > lookback).all()
@@ -399,12 +411,12 @@ def cnnextract(db):
     db.merge(fgiobj)
     db.commit()
 
-@app.get("/data/feargreedindex/{lookbackdays}")
+@app.get("/data/feargreedindex/{lookbackdays}", tags = ["data"])
 def feargreedindex(lookbackdays: int = 1, db: Session = Depends(get_db)):
     res = db.query(FearGreedIndex).filter(FearGreedIndex.timestamp > datetime.utcnow() - timedelta(days=lookbackdays)).all()
     return res
 
-@app.get("/data/binancerecenttrades/{symbol}/{lookbackdays}")
+@app.get("/data/binancerecenttrades/{symbol}/{lookbackdays}", tags = ["data"])
 def binancerecenttrades(symbol: str, lookbackdays: int = -1, db: Session = Depends(get_db)):
     if lookbackdays == -1:
         # get all the data we have
