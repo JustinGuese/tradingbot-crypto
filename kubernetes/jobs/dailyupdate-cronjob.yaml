@@ -5,7 +5,7 @@ metadata:
   namespace: trading
 spec:
   concurrencyPolicy: "Forbid"
-  schedule: "30 12 * * *"
+  schedule: "0 22 * * *"
   jobTemplate:
     spec:
       template:

@@ -6,3 +6,5 @@ python-binance
 python-dotenv
 pandas
 beautifulsoup4
+tradingview-ta
+yfinance

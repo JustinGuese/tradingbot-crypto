@@ -106,6 +106,26 @@ class BinanceRecentTrade(Base):
     isBuyerMaker = Column(Boolean)
     isBestMatch = Column(Boolean)
 
+class StockData(Base):
+    __tablename__ = "stock_data"
+    id = Column(Integer, primary_key=True)
+    date = Column(DateTime)
+    symbol = Column(String(10))
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+    volume = Column(Float)
+
+class TASummary(Base):
+    __tablename__ = "stock_ta_summary"
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String)
+    timestamp = Column(DateTime)
+    recommendation = Column(String)
+    buyCnt = Column(Integer)
+    neutralCnt = Column(Integer)
+    sellCnt = Column(Integer)
 # pydantic models
 
 class AccountPD(BaseModel):

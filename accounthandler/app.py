@@ -2,7 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
     Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending, \
-        PortfolioTracker, FearGreedIndex, BinanceRecentTrade
+        PortfolioTracker, FearGreedIndex, BinanceRecentTrade, TASummary, \
+        StockData
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -18,6 +19,9 @@ import json
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 import re
+from tradingview_ta import TA_Handler, Interval
+import yfinance as yf
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -235,16 +239,6 @@ def apewisdom(db):
         db.merge(obj)
     db.commit()
 
-@app.get("/update/hourly/")
-def hourlyUpdate(db: Session = Depends(get_db)):
-    update(db) # prices update hourly
-    apewisdom(db)
-    __updatePortfolioWorth(db)
-
-@app.get("/update/daily/")
-def dailyUpdate(db: Session = Depends(get_db)):
-    cnnextract(db)
-
 @app.get("/data/apewisdom/{ticker}/{lookback}")
 def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).all()
@@ -252,6 +246,45 @@ def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
 @app.get("/data/apewisdom/")
 def apewisdomGetAll(db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(hours = 1.5)).all()
+
+## stock data functions
+# @app.get("/data/updatestocks/")
+def stockUpdateDaily(db):
+    for stock in environ["STOCKS"].split(","):
+        df = yf.download(stock, period="2d", interval="1d")
+        df = df.reset_index()
+        df["symbol"] = stock
+        df.rename(columns={"Date" : "date" , "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}, inplace=True)
+        df = df.drop(["Adj Close"], axis=1)
+
+        for i in range(len(df)):
+            obj = StockData(**df.iloc[i].to_dict())
+            db.merge(obj)
+        db.commit()
+
+# ta summary
+# id = Column(Integer, primary_key=True)
+# symbol = Column(String)
+# timestamp = Column(DateTime)
+# recommendation = Column(String)
+# buyCnt = Column(Integer)
+# neutralCnt = Column(Integer)
+# sellCnt = Column(Integer)
+# @app.get("/data/updatestocks/tasummary")
+def taUpdateStocks(db):
+    for stock in environ["STOCKS"].split(","):
+        sta = TA_Handler(
+            symbol=stock,
+            screener="america",
+            exchange="NASDAQ",
+            interval=Interval.INTERVAL_1_DAY,
+            # proxies={'http': 'http://example.com:8080'} # Uncomment to enable proxy (replace the URL).
+        )
+        summary = sta.get_analysis().summary
+        # Example output: {"RECOMMENDATION": "BUY", "BUY": 8, "NEUTRAL": 6, "SELL": 3}
+        taobj = TASummary(symbol = stock, timestamp = datetime.utcnow(), recommendation = summary["RECOMMENDATION"], buyCnt = int(summary["BUY"]), neutralCnt = int(summary["NEUTRAL"]), sellCnt = int(summary["SELL"]))
+        db.merge(taobj)
+    db.commit()
 
 # get price data
 @app.get("/data/priceHistoric/{symbol}/{lookbackdays}")
@@ -379,6 +412,25 @@ def binancerecenttrades(symbol: str, lookbackdays: int = -1, db: Session = Depen
     else:
         res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).filter(BinanceRecentTrade.time > datetime.utcnow() - timedelta(days=lookbackdays)).order_by(BinanceRecentTrade.id.desc()).all()
     return res
+
+## stock functions
+# @app.get("/data/stock/tasummary/{symbol}")
+# def getTaSummary(symbol: str, db: Session = Depends(get_db)):
+#     res = db.query(TaSummary).filter(TaSummary.symbol == symbol).order_by(TaSummary.id.desc()).first()
+#     return res
+
+@app.get("/update/hourly/")
+def hourlyUpdate(db: Session = Depends(get_db)):
+    update(db) # prices update hourly
+    apewisdom(db)
+    __updatePortfolioWorth(db)
+
+@app.get("/update/daily/")
+def dailyUpdate(db: Session = Depends(get_db)):
+    cnnextract(db)
+    # stock functions
+    stockUpdateDaily(db)
+    taUpdateStocks(db)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0")

@@ -41,6 +41,8 @@ spec:
                 configMapKeyRef:
                   key: PSQL_URL
                   name: env
+            - name: STOCKS # crypto is stored as symbols
+              value: "AAPL,TSLA,MSFT,FB,INTC,AMD,NVDA,GOOG"
           image: guestros/tradingbot-accounthandler:latest
           name: accounthandler
           ports:
