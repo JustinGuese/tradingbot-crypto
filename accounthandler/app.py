@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
     Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending, \
-        PortfolioTracker, FearGreedIndex
+        PortfolioTracker, FearGreedIndex, BinanceRecentTrade
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -245,16 +245,16 @@ def hourlyUpdate(db: Session = Depends(get_db)):
 def dailyUpdate(db: Session = Depends(get_db)):
     cnnextract(db)
 
-@app.get("/apewisdom/{ticker}/{lookback}")
+@app.get("/data/apewisdom/{ticker}/{lookback}")
 def apewisdomGet(ticker: str, lookback: int, db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.ticker == ticker).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).all()
 
-@app.get("/apewisdom/")
+@app.get("/data/apewisdom/")
 def apewisdomGetAll(db: Session = Depends(get_db)):
     return db.query(ApeRank).filter(ApeRank.timestamp > datetime.utcnow() - pd.Timedelta(hours = 1.5)).all()
 
 # get price data
-@app.get("/priceHistoric/{symbol}/{lookbackdays}")
+@app.get("/data/priceHistoric/{symbol}/{lookbackdays}")
 def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(get_db)):
     lookback = datetime.utcnow() - timedelta(days=lookbackdays)
     hist = db.query(PriceHistory).filter(PriceHistory.symbol == symbol).filter(PriceHistory.opentime > lookback).all()
@@ -364,6 +364,19 @@ def cnnextract(db):
     db.merge(fgiobj)
     db.commit()
 
+@app.get("/data/feargreedindex/{lookbackdays}")
+def feargreedindex(lookbackdays: int = 1, db: Session = Depends(get_db)):
+    res = db.query(FearGreedIndex).filter(FearGreedIndex.timestamp > datetime.utcnow() - timedelta(days=lookbackdays)).all()
+    return res
+
+@app.get("/data/binancerecenttrades/{symbol}/{lookbackdays}")
+def binancerecenttrades(symbol: str, lookbackdays: int = -1, db: Session = Depends(get_db)):
+    if lookbackdays == -1:
+        # get all the data we have
+        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).all()
+    else:
+        res = db.query(BinanceRecentTrade).filter(BinanceRecentTrade.symbol == symbol).filter(BinanceRecentTrade.time > datetime.utcnow() - timedelta(days=lookbackdays)).all()
+    return res
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0")

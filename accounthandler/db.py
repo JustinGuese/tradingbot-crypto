@@ -95,6 +95,17 @@ class FearGreedIndex(Base):
     monthago = Column(Integer)
     yearago = Column(Integer)
 
+class BinanceRecentTrade(Base):
+    __tablename__ = "binance_recentTrades"
+    id = Column(Integer, primary_key=True)
+    time = Column(DateTime)
+    symbol = Column(String)
+    price = Column(Float)
+    qty = Column(Float)
+    quoteQty = Column(Float)
+    isBuyerMaker = Column(Boolean)
+    isBestMatch = Column(Boolean)
+
 # pydantic models
 
 class AccountPD(BaseModel):
