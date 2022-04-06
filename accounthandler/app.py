@@ -102,7 +102,7 @@ def resetAccount(name: str, db: Session = Depends(get_db)):
 
 @app.get("/accounts/ranked/")
 def getRankedAccounts(db: Session = Depends(get_db)):
-    return db.query(Account.name, Account.netWorth).order_by(Account.netWorth.desc()).all()
+    return db.query(Account.name, Account.netWorth, Account.lastTrade).order_by(Account.netWorth.desc()).all()
 
 @app.get("/accounts/{name}")
 def get_account(name: str, db: Session = Depends(get_db)):
