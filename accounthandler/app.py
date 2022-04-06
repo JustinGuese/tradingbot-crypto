@@ -308,18 +308,21 @@ def taUpdateCrypto(db):
 # @app.get("/data/updatestocks/tasummary")
 def taUpdateStocks(db):
     for stock in STOCKS:
-        stockpure = stock.replace("USDT", "")
-        sta = TA_Handler(
-            symbol=stockpure,
-            screener="america",
-            exchange="NASDAQ",
-            interval=Interval.INTERVAL_1_DAY,
-            # proxies={'http': 'http://example.com:8080'} # Uncomment to enable proxy (replace the URL).
-        )
-        summary = sta.get_analysis().summary
-        # Example output: {"RECOMMENDATION": "BUY", "BUY": 8, "NEUTRAL": 6, "SELL": 3}
-        taobj = TASummary(symbol = stock, timestamp = datetime.utcnow(), recommendation = summary["RECOMMENDATION"], buyCnt = int(summary["BUY"]), neutralCnt = int(summary["NEUTRAL"]), sellCnt = int(summary["SELL"]))
-        db.merge(taobj)
+        try:
+            stockpure = stock.replace("USD", "")
+            sta = TA_Handler(
+                symbol=stockpure,
+                screener="america",
+                exchange="NASDAQ",
+                interval=Interval.INTERVAL_1_DAY,
+                # proxies={'http': 'http://example.com:8080'} # Uncomment to enable proxy (replace the URL).
+            )
+            summary = sta.get_analysis().summary
+            # Example output: {"RECOMMENDATION": "BUY", "BUY": 8, "NEUTRAL": 6, "SELL": 3}
+            taobj = TASummary(symbol = stock, timestamp = datetime.utcnow(), recommendation = summary["RECOMMENDATION"], buyCnt = int(summary["BUY"]), neutralCnt = int(summary["NEUTRAL"]), sellCnt = int(summary["SELL"]))
+            db.merge(taobj)
+        except Exception as e:
+            print( "stockUpdateCrypto: problem with symbol " + stock + ": " + str(e))
     db.commit()
 
 # get price data
@@ -473,8 +476,14 @@ def dailyUpdate(db: Session = Depends(get_db)):
     cnnextract(db)
     # stock functions
     stockUpdateDaily(db)
-    taUpdateStocks(db)
-    taUpdateCrypto(db)
+    try:
+        taUpdateStocks(db)
+    except Exception as e:
+        print(repr(e))
+    try:
+        taUpdateCrypto(db)
+    except Exception as e:
+        print(repr(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0")
