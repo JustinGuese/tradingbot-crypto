@@ -38,10 +38,13 @@ def get_db():
 app = FastAPI()
 
 binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
-environ["SYMBOLS"] = "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
-SYMBOLS = environ["SYMBOLS"].split(",")
+# environ["SYMBOLS"] = "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
 SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
+
+STOCKS = environ["STOCKS"].split(",")
+STOCKS = [symb + "USDT" for symb in STOCKS]
+
 
 # @app.on_event("startup")
 # def startup_event():
@@ -282,11 +285,32 @@ def stockUpdateDaily(db):
 # buyCnt = Column(Integer)
 # neutralCnt = Column(Integer)
 # sellCnt = Column(Integer)
+# @app.get("/data/updatestocks/tasummarycrypto")
+def taUpdateCrypto(db):
+    for stock in SYMBOLS:
+        # stock += "USDT" # should alread be done above
+        try:
+            sta = TA_Handler(
+                symbol=stock,
+                screener="crypto",
+                exchange="BINANCE",
+                interval=Interval.INTERVAL_1_DAY,
+                # proxies={'http': 'http://example.com:8080'} # Uncomment to enable proxy (replace the URL).
+            )
+            summary = sta.get_analysis().summary
+            # Example output: {"RECOMMENDATION": "BUY", "BUY": 8, "NEUTRAL": 6, "SELL": 3}
+            taobj = TASummary(symbol = stock, timestamp = datetime.utcnow(), recommendation = summary["RECOMMENDATION"], buyCnt = int(summary["BUY"]), neutralCnt = int(summary["NEUTRAL"]), sellCnt = int(summary["SELL"]))
+            db.merge(taobj)
+        except Exception as e:
+            print( "taUpdateCrypto: problem with symbol " + stock + ": " + str(e))
+    db.commit()
+
 # @app.get("/data/updatestocks/tasummary")
 def taUpdateStocks(db):
-    for stock in environ["STOCKS"].split(","):
+    for stock in STOCKS:
+        stockpure = stock.replace("USDT", "")
         sta = TA_Handler(
-            symbol=stock,
+            symbol=stockpure,
             screener="america",
             exchange="NASDAQ",
             interval=Interval.INTERVAL_1_DAY,
@@ -443,6 +467,7 @@ def dailyUpdate(db: Session = Depends(get_db)):
     # stock functions
     stockUpdateDaily(db)
     taUpdateStocks(db)
+    taUpdateCrypto(db)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0")

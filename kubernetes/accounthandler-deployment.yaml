@@ -41,13 +41,21 @@ spec:
                 configMapKeyRef:
                   key: PSQL_URL
                   name: env
+            - name: SYMBOLS
+              value: "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
             - name: STOCKS # crypto is stored as symbols
               value: "AAPL,TSLA,MSFT,FB,INTC,AMD,NVDA,GOOG"
           image: guestros/tradingbot-accounthandler:latest
           name: accounthandler
           ports:
             - containerPort: 8000
-          resources: {}
+          resources:
+            # limits:
+            #   cpu: "100m"
+            #   memory: "100Mi"
+            requests:
+              cpu: "200m"
+              memory: "500Mi"
       restartPolicy: Always
 status: {}
 ---
