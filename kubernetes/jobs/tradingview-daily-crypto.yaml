@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tradingview-daily-crypto
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "05 22 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: tradingview-daily-crypto
+            image: guestros/tradingbot-tacryptodaily:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: tacryptdly
+          restartPolicy: OnFailure
+    

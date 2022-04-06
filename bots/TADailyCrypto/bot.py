@@ -18,7 +18,7 @@ buys = []
 sells = []
 strongsells = []
 
-for symbol in "AAPLUSD,TSLAUSD,MSFTUSD,FBUSD,INTCUSD,AMDUSD,NVDAUSD,GOOGUSD".split(","):
+for symbol in "BTCUSDT,ETHUSDT,MATICUSDT,AVAXUSDT,XRPUSDT,BNBUSDT,LINKUSDT,ADAUSDT".split(","):
     decision = ti.getTARecommendation(symbol)
     # will be one of: None, SELL; BUY; NEUTRAL; STRONG_SELL; STRONG_BUY
     if decision is None:

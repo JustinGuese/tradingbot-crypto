@@ -88,6 +88,18 @@ def create_account(name: str, description: str = "", startmoney: float = 10000.,
 def getAccounts(db: Session = Depends(get_db)):
     return db.query(Account.name, Account.netWorth, Account.portfolio).order_by(Account.netWorth.desc()).all()
 
+@app.post("/account/reset/{name}")
+def resetAccount(name: str, db: Session = Depends(get_db)):
+    account = getAccount(name, db)
+    account.portfolio = {
+        "USDT": 10000.,
+    }
+    account.netWorth = 10000.
+    account.lastTrade = datetime.utcnow()
+    account.lastUpdateWorth = datetime.utcnow()
+    db.commit()
+    return account
+
 @app.get("/accounts/ranked/")
 def getRankedAccounts(db: Session = Depends(get_db)):
     return db.query(Account.name, Account.netWorth).order_by(Account.netWorth.desc()).all()

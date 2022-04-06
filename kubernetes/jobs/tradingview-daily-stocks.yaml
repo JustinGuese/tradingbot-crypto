@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tradingview-daily-stocks
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "05 22 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: tradingview-daily-stocks
+            image: guestros/tradingbot-tastockdaily:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: tastockdly
+          restartPolicy: OnFailure
+    

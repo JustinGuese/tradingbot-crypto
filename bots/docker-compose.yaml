@@ -39,3 +39,11 @@ services:
   recentTradesSklearn:
     image: guestros/tradingbot-recenttrades-sklearn:latest
     build: ./recentTradesMinimal
+
+  taStockDaily:
+    image: guestros/tradingbot-tastockdaily:latest
+    build: ./TADailyStock
+
+  taCryptoDaily:
+    image: guestros/tradingbot-tacryptodaily:latest
+    build: ./TADailyCrypto
