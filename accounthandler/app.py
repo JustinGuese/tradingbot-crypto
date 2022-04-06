@@ -43,7 +43,7 @@ SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
 
 STOCKS = environ["STOCKS"].split(",")
-STOCKS = [symb + "USDT" for symb in STOCKS]
+STOCKS = [symb + "USD" for symb in STOCKS]
 
 
 # @app.on_event("startup")
@@ -258,7 +258,7 @@ def cnnsentiment(lookback: int = 1, db: Session = Depends(get_db)):
 def getStockData(symbol: str, lookback: int = 1, db: Session = Depends(get_db)):
     return db.query(StockData).filter(StockData.symbol == symbol).filter(StockData.date > datetime.utcnow() - pd.Timedelta(days = lookback)).order_by(StockData.date.desc()).all()
 
-@app.get("/data/stock/tasummary/{symbol}/{lookback}",  tags = ["data", "stock"])
+@app.get("/data/tasummary/{symbol}/{lookback}",  tags = ["data", "stock"])
 def getTASummary(symbol: str, lookback: int = 1, db: Session = Depends(get_db)):
     return db.query(TASummary).filter(TASummary.symbol == symbol).filter(TASummary.timestamp > datetime.utcnow() - pd.Timedelta(days = lookback)).order_by(TASummary.timestamp.desc()).all()
 
@@ -344,7 +344,14 @@ def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(g
 ## trade functioms
 
 def getCurrentPrice(symbol):
-    return float(binanceapi.get_avg_price(symbol=symbol)["price"])
+    if "USDT" in symbol:
+        return float(binanceapi.get_avg_price(symbol=symbol)["price"])
+    elif "USD" in symbol:
+        symbol = symbol.replace("USD", "")
+        return float(yf.download(symbol, period="1d", interval="1m")["Close"][-1])
+    else:
+        raise ValueError("getCurrentPrice: symbol " + symbol + " not supported")
+    
 
 COMMISSION = 0.00125
 @app.put("/buy/{name}/{symbol}/{amount}")
