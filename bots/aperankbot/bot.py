@@ -11,7 +11,7 @@ usdt = portfolio["USDT"]
 
 ape = ti.getApeWisdomLast()
 # take top 10
-ape = ape[:20]
+ape = ape[:10]
 # keep only names
 ape = [x["ticker"] for x in ape]
 
@@ -28,15 +28,16 @@ usdt = ti.getUSD()
 print("i have %.2f $ to spend" % usdt)
 nrPurchases = 0 # max 10
 for i,symbol in enumerate(ape):
-    if symbol in list(portfolio.keys()):
-        continue
-    if nrPurchases >= 10:
-        break # stop buying
-    # else buy
-    print("trying to buy: ", symbol)
-    try:
-        portf = ti.buy(symbol, weights[i] * usdt)
-    except Exception as e:
-        print("problem with buying %s. will skip to next" % symbol)
+    if symbol != "USDT":
+        if symbol in list(portfolio.keys()):
+            continue
+        if nrPurchases >= 10:
+            break # stop buying
+        # else buy
+        print("trying to buy: ", symbol)
+        try:
+            portf = ti.buy(symbol, weights[i] * usdt)
+        except Exception as e:
+            print("problem with buying %s. will skip to next" % symbol, str(e))
 
 pprint(portf)
