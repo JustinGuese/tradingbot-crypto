@@ -5,8 +5,8 @@ import numpy as np
 from scipy.signal import argrelextrema
 
 
-def preprocess(symbol, lookback = "60d"):
-    data = yf.download(symbol, period=lookback, interval = "30m")
+def preprocess(symbol, lookback = "60d", interval = "30m"):
+    data = yf.download(symbol, period=lookback, interval = interval)
     data.columns = [x.lower() for x in data.columns]
     data = add_all_ta_features(data, "open", "high", "low", "close", "volume")
     # replace np.inf with np.nan
@@ -43,8 +43,8 @@ def preprocess(symbol, lookback = "60d"):
     X = data.drop(["target", "minextrema", "maxextrema"], axis=1)
     return X, Y
 
-def doTraining(symbol):
-    X, Y = preprocess(symbol)
+def doTraining(symbol, lookback = "60d", interval = "30m"):
+    X, Y = preprocess(symbol, lookback = lookback, interval = interval)
     from xgboost import XGBClassifier
     clf = XGBClassifier()
     clf.fit(X, Y)

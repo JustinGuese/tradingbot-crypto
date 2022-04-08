@@ -3,8 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   namespace: trading
   labels:
-    name: xgb-minmax-30min-pv-claim
-  name: xgb-minmax-30min-pv-claim
+    name: xgb-minmax-30min-3stepbuffer-pv-claim
+  name: xgb-minmax-30min-3stepbuffer-pv-claim
 spec:
   accessModes:
     - ReadWriteOnce
@@ -15,7 +15,7 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: xgb-minmax-30min
+  name: xgb-minmax-30min-3stepbuffer
   namespace: trading
 spec:
   concurrencyPolicy: "Forbid"
@@ -25,12 +25,12 @@ spec:
       template:
         spec:
           containers:
-          - name: xgb-minmax-30min
+          - name: xgb-minmax-30min-3stepbuffer
             image: guestros/tradingbot-xgb-minmax-30min:latest
             imagePullPolicy: Always
             env:
               - name: BOTNAME
-                value: "xgb30min"
+                value: "xgb30buff"
               - name: LOOKBACK_TRAINING
                 value: "60d"
               - name: LOOKBACK_PREDICTION
@@ -38,12 +38,12 @@ spec:
               - name: INTERVAL
                 value: "30m"
               - name: LOOKBACK_MEDIAN_PRED
-                value: "1"
+                value: "3"
             volumeMounts:
-              - name: xgb-minmax-30min-pv
+              - name: xgb-minmax-30min-3stepbuffer-pv
                 mountPath: /persistent/
           restartPolicy: OnFailure
           volumes:
-            - name: xgb-minmax-30min-pv
+            - name: xgb-minmax-30min-3stepbuffer-pv
               persistentVolumeClaim:
-                claimName: xgb-minmax-30min-pv-claim
+                claimName: xgb-minmax-30min-3stepbuffer-pv-claim

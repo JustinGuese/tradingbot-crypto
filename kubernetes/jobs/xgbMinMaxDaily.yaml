@@ -3,8 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   namespace: trading
   labels:
-    name: xgb-minmax-30min-pv-claim
-  name: xgb-minmax-30min-pv-claim
+    name: xgb-minmax-daily-pv-claim
+  name: xgb-minmax-daily-pv-claim
 spec:
   accessModes:
     - ReadWriteOnce
@@ -15,35 +15,35 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: xgb-minmax-30min
+  name: xgb-minmax-daily
   namespace: trading
 spec:
   concurrencyPolicy: "Forbid"
-  schedule: "31,1 * * * *"
+  schedule: "1 0 * * *"
   jobTemplate:
     spec:
       template:
         spec:
           containers:
-          - name: xgb-minmax-30min
+          - name: xgb-minmax-daily
             image: guestros/tradingbot-xgb-minmax-30min:latest
             imagePullPolicy: Always
             env:
               - name: BOTNAME
-                value: "xgb30min"
+                value: "xgbdaily"
               - name: LOOKBACK_TRAINING
-                value: "60d"
+                value: "1y"
               - name: LOOKBACK_PREDICTION
-                value: "2d"
+                value: "14d"
               - name: INTERVAL
-                value: "30m"
+                value: "1d"
               - name: LOOKBACK_MEDIAN_PRED
                 value: "1"
             volumeMounts:
-              - name: xgb-minmax-30min-pv
+              - name: xgb-minmax-daily-pv
                 mountPath: /persistent/
           restartPolicy: OnFailure
           volumes:
-            - name: xgb-minmax-30min-pv
+            - name: xgb-minmax-daily-pv
               persistentVolumeClaim:
-                claimName: xgb-minmax-30min-pv-claim
+                claimName: xgb-minmax-daily-pv-claim
