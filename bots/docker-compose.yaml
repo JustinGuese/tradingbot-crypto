@@ -47,3 +47,7 @@ services:
   taCryptoDaily:
     image: guestros/tradingbot-tacryptodaily:latest
     build: ./TADailyCrypto
+
+  xgbMinMaxima30min:
+    image: guestros/tradingbot-xgb-minmax-30min:latest
+    build: ./xgb_minmaxima

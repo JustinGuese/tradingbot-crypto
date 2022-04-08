@@ -1,0 +1,5 @@
+ta
+yfinance
+xgboost
+scipy
+sklearn

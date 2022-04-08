@@ -25,3 +25,6 @@ docker push guestros/tradingbot-randombenchmark:latest
 # lstm complexi with recent trades
 docker build -t guestros/tradingbot-recentrades-lstm:latest ./lstm-recenttrades
 docker push guestros/tradingbot-recentrades-lstm:latest
+# xgb 30 min min max
+docker build -t guestros/tradingbot-xgb-minmax-30min:latest ./xgb_minmaxima
+docker push guestros/tradingbot-xgb-minmax-30min:latest
