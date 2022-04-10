@@ -11,7 +11,7 @@ from sqlalchemy.ext.mutable import MutableDict
 from dotenv import load_dotenv
 load_dotenv() 
 
-# environ["PSQL_URL"] = "postgres:tradingbot@192.168.178.36:30001"
+# environ["PSQL_URL"] = "postgres:tradingbot@198.74.104.172:30001"
 
 DATABASE_URL = "postgresql+psycopg2://" + environ["PSQL_URL"] # user:password@postgresserver/db
 

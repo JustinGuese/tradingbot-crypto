@@ -17,5 +17,5 @@ spec:
             command:
             - /bin/sh
             - -c
-            - curl -X 'GET' 'http://192.168.178.36:30002/update/daily/'
+            - curl -X 'GET' 'http://198.74.104.172:30002/update/daily/'
           restartPolicy: OnFailure
