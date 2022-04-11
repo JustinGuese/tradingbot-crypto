@@ -390,23 +390,28 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
 def __sell(name, symbol, amount, amountInUSD, db):
     account = getAccount(name, db)
     # portfolio = account.portfolio
-    amountSymbol = account.portfolio.get(symbol, 0)
-    currentPrice = getCurrentPrice(symbol)
+    amountSymbol = account.portfolio.get(symbol, -1)
     if amountSymbol == 0:
+        # cleanes up a bug where we set amount to 0 after a sale
+        symbolsHolding = list(account.portfolio.keys())
+        for symbol in symbolsHolding:
+            if symbol != "USDT" and account.portfolio[symbol] == 0:
+                del account.portfolio[symbol]
+    elif amountSymbol == -1:
         raise HTTPException(status_code=400, detail="No such symbol in portfolio. portfolio: %s" % str(account.portfolio))
-    if amount == -1:
-        # means sell all
-        amount = amountSymbol
-    elif amountInUSD:
-        amount = amount / currentPrice
-    if amount > amountSymbol:
-        raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
-    
-    win = amount * currentPrice * (1 - COMMISSION)
-    account.portfolio[symbol] = amountSymbol - amount
-    account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
-    if account.portfolio[symbol] == 0:
-        del account.portfolio[symbol]
+    else:
+        currentPrice = getCurrentPrice(symbol)
+        if amount == -1:
+            # means sell all
+            amount = amountSymbol
+        elif amountInUSD:
+            amount = amount / currentPrice
+        if amount > amountSymbol:
+            raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
+        
+        win = amount * currentPrice * (1 - COMMISSION)
+        account.portfolio[symbol] = amountSymbol - amount
+        account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
     # account.portfolio = account.portfolio
     db.merge(account)
     db.commit()

@@ -37,7 +37,7 @@ for symbol in SYMBOLS:
     latestPrediction = np.median(pred[-int(environ["LOOKBACK_MEDIAN_PRED"]):])
     if portfolio.get(symbdict[symbol], 0) > 0 and latestPrediction == -1:
         print("Selling %s" % symbol)
-        ti.sell(symbol, -1)
+        ti.sell(symbdict[symbol], -1)
     elif portfolio.get(symbdict[symbol], 0) == 0 and latestPrediction == 1:
         # ti.buy(symbol, 1)
         toBuy.append(symbdict[symbol])
