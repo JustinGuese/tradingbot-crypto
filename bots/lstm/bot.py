@@ -85,7 +85,7 @@ if __name__ == "__main__":
             pred = (pred > .5) * 1
             # now lookback in action
             lookback = BESTLOOKBACKS[symbol]
-            pred = pred[-lookback:]
+            pred = pred[-(lookback+1):-1]
             pred = np.median(pred)
             # 0 = sell, 1 = buy
             print("prediction for %s: %s" % (symbol, str(pred)))

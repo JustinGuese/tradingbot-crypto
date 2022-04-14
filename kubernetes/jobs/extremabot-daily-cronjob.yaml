@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tradingbot-extrema-daily
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "5 22 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: tradingbot-extrema-daily
+            image: guestros/tradingbot-extrematrader:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: "extrema"
+          restartPolicy: OnFailure

@@ -51,3 +51,7 @@ services:
   xgbMinMaxima30min:
     image: guestros/tradingbot-xgb-minmax-30min:latest
     build: ./xgb_minmaxima
+
+  extremaTrader:
+    image: guestros/tradingbot-extrematrader:latest
+    build: ./extrematrader
