@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: coingecko-gainers-30d-top300
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "2 13 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: coingecko-gainers-30d-top300
+            image: guestros/tradingbot-coingecko-gainers:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: cggain330
+              - name: COINGECKO_DAYS
+                value: "30"
+              - name: COINGECKO_TOP
+                value: "300"
+          restartPolicy: OnFailure

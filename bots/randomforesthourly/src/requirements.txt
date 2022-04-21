@@ -1,0 +1,7 @@
+pandas
+sklearn
+yfinance
+scipy
+tqdm
+joblib
+ta

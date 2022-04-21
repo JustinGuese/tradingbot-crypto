@@ -28,3 +28,6 @@ docker push guestros/tradingbot-recentrades-lstm:latest
 # xgb 30 min min max
 docker build -t guestros/tradingbot-xgb-minmax-30min:latest ./xgb_minmaxima
 docker push guestros/tradingbot-xgb-minmax-30min:latest
+# coingecko gainers
+docker build -t guestros/tradingbot-coingecko-gainers:latest ./coingecko-gainersbot
+docker push guestros/tradingbot-coingecko-gainers:latest

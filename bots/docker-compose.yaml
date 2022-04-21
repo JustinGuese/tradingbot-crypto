@@ -55,3 +55,7 @@ services:
   extremaTrader:
     image: guestros/tradingbot-extrematrader:latest
     build: ./extrematrader
+
+  randomforestTrader:
+    image: guestros/tradingbot-randomforesttrader:latest
+    build: ./randomforesthourly

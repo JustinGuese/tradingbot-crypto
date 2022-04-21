@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: trading
+  labels:
+    name: randomforest-hourly-pv-claim
+  name: randomforest-hourly-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: randomforest-hourly
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: randomforest-hourly
+            image: guestros/tradingbot-randomforesttrader:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: "randomf"
+            volumeMounts:
+              - name: randomforest-hourly-pv
+                mountPath: /persistent/
+          restartPolicy: OnFailure
+          volumes:
+            - name: randomforest-hourly-pv
+              persistentVolumeClaim:
+                claimName: randomforest-hourly-pv-claim
