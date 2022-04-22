@@ -370,7 +370,15 @@ def getCurrentPrice(symbol):
         return float(yf.download(symbol, period="1d", interval="1m")["Close"][-1])
     else:
         raise ValueError("getCurrentPrice: symbol " + symbol + " not supported")
-    
+
+@app.get("/data/price/current/{symbol}", tags = ["price"])
+def getCurrentPriceRoute(symbol: str):
+    symbol = symbol.upper()
+    try:
+        price = getCurrentPrice(symbol)
+        return price
+    except Exception as e:
+        raise # HTTPException(status_code=404, detail="could not get data: " + str(e))
 
 COMMISSION = 0.00125
 @app.put("/buy/{name}/{symbol}/{amount}")
