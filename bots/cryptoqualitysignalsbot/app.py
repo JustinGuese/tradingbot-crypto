@@ -53,8 +53,8 @@ if usdt > 10:
         currency = signal.currency
         if currency == "USD":
             currency = "USDT"
-        if "USD" in symbol:
-            symbol = symbol.replace("USD", "USDT")
+        if "USD" in signal.coin:
+            symbol = signal.coin.replace("USD", "USDT")
         else:
             symbol = signal.coin + currency
         # sometimes symbol has weird values
