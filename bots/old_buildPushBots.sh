@@ -31,3 +31,6 @@ docker push guestros/tradingbot-xgb-minmax-30min:latest
 # coingecko gainers
 docker build -t guestros/tradingbot-coingecko-gainers:latest ./coingecko-gainersbot
 docker push guestros/tradingbot-coingecko-gainers:latest
+# cryptoqualitysignalsbot and updater
+docker build -t guestros/tradingbot-cryptoqualitysignalsbot-and-updater:latest ./cryptoqualitysignalsbot
+docker push guestros/tradingbot-cryptoqualitysignalsbot-and-updater:latest

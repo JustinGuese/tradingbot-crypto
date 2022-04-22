@@ -1,0 +1,3 @@
+requests
+SqlAlchemy
+psycopg2-binary
