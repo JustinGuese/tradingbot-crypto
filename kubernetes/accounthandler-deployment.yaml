@@ -28,19 +28,19 @@ spec:
         - env:
             - name: BINANCE_KEY
               valueFrom:
-                configMapKeyRef:
+                secretKeyRef:
+                  name: binance-creds
                   key: BINANCE_KEY
-                  name: env
             - name: BINANCE_SECRET
               valueFrom:
-                configMapKeyRef:
+                secretKeyRef:
+                  name: binance-creds
                   key: BINANCE_SECRET
-                  name: env
             - name: PSQL_URL
               valueFrom:
-                configMapKeyRef:
+                secretKeyRef:
+                  name: binance-creds
                   key: PSQL_URL
-                  name: env
             - name: SYMBOLS
               value: "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
             - name: STOCKS # crypto is stored as symbols
