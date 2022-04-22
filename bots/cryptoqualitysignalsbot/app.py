@@ -26,7 +26,7 @@ for signal in res["signals"]:
     # datetime cast
     signal["timestamp"] = datetime.strptime(signal["timestamp"], "%Y-%m-%d %H:%M:%S")
     signal["created_at"] = datetime.utcnow()
-    signal["executed"] = False
+    # signal["executed"] = False
     # make sanity check of target1, target2 , target3
     if not (signal["target1"] < signal["target2"] < signal["target3"]):
         if signal["target1"] == 0:
@@ -36,8 +36,13 @@ for signal in res["signals"]:
         if signal["target3"] < signal["target2"]:
             signal["target3"] = signal["target2"]
     signalObj = CryptoQualitySignal(**signal)
-    session.merge(signalObj)
-session.commit()
+    try:
+        session.add(signalObj)
+        session.commit()
+    except Exception as e:
+        # print(e)
+        session.rollback()
+        # probably bc it is already in there and we do not want to overwrite
 
 
 ti = TradingInteractor(environ["BOTNAME"])
