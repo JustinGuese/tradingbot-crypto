@@ -45,9 +45,9 @@ usdt = portfolio["USDT"]
 
 # and buy all 
 startBuyMoney = usdt / 5 # start with a 4th
-for coin in trendingCoins:
+for i,coin in enumerate(trendingCoins):
     if coin not in portfolio and startBuyMoney > 10:
-        print("buying: %s" % coin)
+        print("pos %d: buying %.2f$ of %s" % (i+1, startBuyMoney, coin))
         try:
             ti.buy(coin,startBuyMoney)
             startBuyMoney *= .75 # half the invest
