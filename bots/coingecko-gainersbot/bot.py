@@ -11,7 +11,7 @@ def extractOne(item):
     return (Symbol,Volume.replace("$",''),Price.replace("$",''),per.replace("%",''))
 
 def getCoingeckoTrending():
-    url = "https://www.coingecko.com/en/coins/trending?time=d%d&top=%d" % (int(environ.get("COINGECKO_DAYS",30)), int(environ.get("COINGECKO_TOP",100)))
+    url = "https://www.coingecko.com/en/coins/trending?time=%s&top=%d" % (environ.get("COINGECKO_LOOKBACK","d30"), int(environ.get("COINGECKO_TOP",100)))
     
     scraper = create_scraper()
     response = scraper.get(url)

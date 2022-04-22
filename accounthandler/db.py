@@ -24,17 +24,19 @@ Base = declarative_base()
 class Account(Base):
     __tablename__ = "accounts"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(10), unique=True)
+    name = Column(String(30), unique=True)
     description = Column(String(100))
     portfolio = Column(MutableDict.as_mutable(JSON))
     lastTrade = Column(DateTime)
     netWorth = Column(Float)
     lastUpdateWorth = Column(DateTime)
+    createdAt = Column(DateTime, default = datetime.utcnow)
 
 class Trade(Base):
     __tablename__ = "trades"
     id = Column(Integer, primary_key=True, index=True)
-    name= Column(String(30))
+    accountname = Column(String(30))
+    symbol = Column(String(10))
     amount= Column(Float)
     price= Column(Float)
     buy= Column(Boolean)
@@ -128,17 +130,30 @@ class TASummary(Base):
     sellCnt = Column(Integer)
 # pydantic models
 
+    # id = Column(Integer, primary_key=True, index=True)
+    # name = Column(String(30), unique=True)
+    # description = Column(String(100))
+    # portfolio = Column(MutableDict.as_mutable(JSON))
+    # lastTrade = Column(DateTime)
+    # netWorth = Column(Float)
+    # lastUpdateWorth = Column(DateTime)
+    # createdAt = Column(DateTime, default = datetime.utcnow)
 class AccountPD(BaseModel):
     id: int
     name: str
+    description: str
     portfolio: Dict[str, float]
     lastTrade: datetime = datetime.utcnow()
+    netWorth: float = 10000.0
+    lastUpdateWorth: datetime = datetime.utcnow()
+    createdAt: datetime = datetime.utcnow()
     class Config:
         orm_mode = True
 
 class TradePD(BaseModel):
     id: int
-    name: str
+    accountname: str
+    symbol: str
     amount: float
     price: float
     buy: bool

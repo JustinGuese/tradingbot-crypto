@@ -60,13 +60,7 @@ STOCKS = [symb + "USD" for symb in STOCKS]
 #             print("startup: Failed to get historic prices for symbol: " + symbol)
 
 
-# checks if account exists and returns it if it does
-def getAccount(name: str, db):
-    # db.query(models.Record).all()
-    account = db.query(Account).filter(Account.name == name).first()
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
-    return account
+
 
 @app.put("/accounts/{name}")
 def create_account(name: str, description: str = "", startmoney: float = 10000., db: Session = Depends(get_db)):
@@ -79,9 +73,19 @@ def create_account(name: str, description: str = "", startmoney: float = 10000.,
         "USDT": startmoney,
     }
     account = Account(name=name, portfolio=portfolio, description=description, 
-        lastTrade=datetime.utcnow(), netWorth = startmoney, lastUpdateWorth = datetime.utcnow())
+        lastTrade=datetime.utcnow(), netWorth = startmoney, lastUpdateWorth = datetime.utcnow(), createdAt = datetime.utcnow())
     db.add(account)
     db.commit()
+    return account
+
+# checks if account exists and returns it if it does
+def getAccount(name: str, db):
+    # db.query(models.Record).all()
+    account = db.query(Account).filter(Account.name == name).first()
+    if account is None:
+        # raise HTTPException(status_code=404, detail="Account not found")
+        # actually create it and return it
+        account = create_account(name, "", startmoney = 10000., db = db)
     return account
 
 @app.get("/accounts/")
@@ -383,8 +387,18 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     account.portfolio["USDT"] = usdt - cost
     account.portfolio[symbol] = account.portfolio.get(symbol, 0) + amount
     # account.portfolio = json.dumps(portfolio)
+    # finally set last trade to now
+    account.lastTrade = datetime.utcnow()
     db.merge(account)
     db.commit()
+    # then write it to db
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = True)
+    db.merge(trade)
+    try:
+        db.commit()
+    except Exception as e:
+        print(e)
+        pass # for now
     return account.portfolio
 
 def __sell(name, symbol, amount, amountInUSD, db):
@@ -413,8 +427,19 @@ def __sell(name, symbol, amount, amountInUSD, db):
         account.portfolio[symbol] = amountSymbol - amount
         account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
     # account.portfolio = account.portfolio
+    # finally set last trade to now
+    account.lastTrade = datetime.utcnow()
+
     db.merge(account)
     db.commit()
+    # then write it to db
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = False)
+    db.merge(trade)
+    try:
+        db.commit()
+    except Exception as e:
+        print(e)
+        pass # for now
     return account.portfolio
 
 # sell
