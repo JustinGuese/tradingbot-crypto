@@ -73,7 +73,9 @@ if usdt > 10:
             print("could not get price for: %s" % symbol)
             price = -1
         if price != -1:
-            # if we have a price
+            # and only buy if we do not havy any open so far
+            # if symbol not in portfolio:
+            #     # if we have a price
             # check if we are in range yet
             if signal.buy_start <= price <= signal.buy_end:
                 # the moment to buy!
