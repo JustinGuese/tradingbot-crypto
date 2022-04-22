@@ -102,49 +102,57 @@ if len(portfolio) > 1:
             currency = "USDT"
         symbol = signal.coin + currency
         # sometimes symbol has weird values
-        # try to get price of symbol
-        try:
-            price = ti.getCurrentPrice(symbol)
-        except Exception as e:
-            print("could not get price for: %s" % symbol)
-            price = -1
-        if price != -1:
-            # first check if we crossed the stop_loss already
-            if price < signal.stop_loss:
-                # the moment to sell!
-                try:
-                    # try to calculate the profit level
-                    if signal.stop_loss < signal.target1:
-                        # means it is the real stop loss
-                        reason = "stop_loss :("
-                    elif signal.stop_loss < signal.target2:
-                        reason= "target1 :) "
-                    elif signal.stop_loss < signal.target3:
-                        reason = "target2 :)) "
-                    else:
-                        reason = "unknown :x"
-                    print("sell - %s reached: %s" % (reason,symbol))
-                    ti.sell(symbol, usdt / 4)
-                    signal.inExecution = False
+        # makes only sense to check if it's still in our portfolio though
+        if not symbol in portfolio:
+            # maybe a bug? or another one sold it? anyways mark it
+            print("%s not in portfolio anymore, marking as executed." % symbol)
+            signal.inExecution = False  
+            session.merge(signal)
+            session.commit()
+        else:
+            # try to get price of symbol
+            try:
+                price = ti.getCurrentPrice(symbol)
+            except Exception as e:
+                print("could not get price for: %s" % symbol)
+                price = -1
+            if price != -1:
+                # first check if we crossed the stop_loss already
+                if price < signal.stop_loss:
+                    # the moment to sell!
+                    try:
+                        # try to calculate the profit level
+                        if signal.stop_loss < signal.target1:
+                            # means it is the real stop loss
+                            reason = "stop_loss :("
+                        elif signal.stop_loss < signal.target2:
+                            reason= "target1 :) "
+                        elif signal.stop_loss < signal.target3:
+                            reason = "target2 :)) "
+                        else:
+                            reason = "unknown :x"
+                        print("sell - %s reached: %s" % (reason,symbol))
+                        ti.sell(symbol, usdt / 4)
+                        signal.inExecution = False
+                        session.merge(signal)
+                    except Exception as e:
+                        print("could not sell: %s" % symbol)
+                # then check if we crossed the target1 already and if so, mark it in db
+                elif price >= signal.target1:
+                    # set the new stop_loss to target1
+                    signal.stop_loss = price
                     session.merge(signal)
-                except Exception as e:
-                    print("could not sell: %s" % symbol)
-            # then check if we crossed the target1 already and if so, mark it in db
-            elif price >= signal.target1:
-                # set the new stop_loss to target1
-                signal.stop_loss = price
-                session.merge(signal)
-            # then check if we crossed target 2, if yes sell the f out of it
-            elif price >= signal.target2:
-                # set new stop_loss to target2
-                signal.stop_loss = price
-                session.merge(signal)
-            elif price > signal.target3:
-                # the moment to sell anyways!
-                try:
-                    print("sell - bigprofit!$$$ crossed targetlevel 3: %s" % symbol)
-                    ti.sell(symbol, -1)
-                    signal.inExecution = False
+                # then check if we crossed target 2, if yes sell the f out of it
+                elif price >= signal.target2:
+                    # set new stop_loss to target2
+                    signal.stop_loss = price
                     session.merge(signal)
-                except Exception as e:
-                    print("could not sell: %s" % symbol)
+                elif price > signal.target3:
+                    # the moment to sell anyways!
+                    try:
+                        print("sell - bigprofit!$$$ crossed targetlevel 3: %s" % symbol)
+                        ti.sell(symbol, -1)
+                        signal.inExecution = False
+                        session.merge(signal)
+                    except Exception as e:
+                        print("could not sell: %s" % symbol)

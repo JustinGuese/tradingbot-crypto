@@ -158,7 +158,7 @@ def getHistoricPrices(symbol, interval = "60m", lookback = "2 hour ago UTC"):
     hist_df["id"] = hist_df.apply(createHistoricPriceId, axis=1)
     return hist_df
 
-def savePrice2DB(df, db):
+def savePrice2DB(df, db: Session = Depends(get_db)):
     # write only those to DB that are not already in there
     bulk = []
     for i in range(len(df)):
@@ -167,7 +167,7 @@ def savePrice2DB(df, db):
     db.commit()
 
 # @app.get("/update/price")
-def update(db):
+def update(db: Session = Depends(get_db)):
     print("geddin updates for: ", SYMBOLS)
     for symbol in SYMBOLS:
         try:
@@ -178,7 +178,7 @@ def update(db):
             continue
 
 # 
-def __updatePortfolioWorth(db):
+def __updatePortfolioWorth(db: Session = Depends(get_db)):
     symbolPrices = dict()
     allAccounts = db.query(Account).all()
     for account in allAccounts:
@@ -280,7 +280,7 @@ def getTASummary(symbol: str, lookback: int = 1, db: Session = Depends(get_db)):
 
 ## stock data functions
 # @app.get("/data/updatestocks/")
-def stockUpdateDaily(db):
+def stockUpdateDaily(db: Session = Depends(get_db)):
     for stock in environ["STOCKS"].split(","):
         df = yf.download(stock, period="2d", interval="1d")
         df = df.reset_index()
@@ -322,7 +322,7 @@ def taUpdateCrypto(db):
     db.commit()
 
 # @app.get("/data/updatestocks/tasummary")
-def taUpdateStocks(db):
+def taUpdateStocks(db: Session = Depends(get_db)):
     for stock in STOCKS:
         try:
             stockpure = stock.replace("USD", "")
@@ -517,9 +517,18 @@ def binancerecenttrades(symbol: str, lookbackdays: int = -1, db: Session = Depen
 
 @app.get("/update/hourly/")
 def hourlyUpdate(db: Session = Depends(get_db)):
-    update(db) # prices update hourly
-    apewisdom(db)
-    __updatePortfolioWorth(db)
+    try:
+        update(db) # prices update hourly
+    except:
+        pass
+    try:
+        apewisdom(db)
+    except:
+        pass
+    try:
+        __updatePortfolioWorth(db)
+    except:
+        pass
 
 @app.get("/update/daily/")
 def dailyUpdate(db: Session = Depends(get_db)):
