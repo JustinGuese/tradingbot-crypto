@@ -117,8 +117,12 @@ def getRankedAccounts(db: Session = Depends(get_db)):
         tmp["createdAt"] = r.createdAt
         # calculate win per month
         holdingMonths = (datetime.utcnow() - tmp["createdAt"]).days / 30
-        tmp["winPerMonth"] = round((tmp["netWorth"] - 10000) / holdingMonths, 2)
-        tmp["winPctPerMonth"] = round(tmp["winPerMonth"] / 10000 * 100, 2)
+        if holdingMonths > 0:
+            tmp["winPerMonth"] = round((tmp["netWorth"] - 10000) / holdingMonths, 2)
+            tmp["winPctPerMonth"] = round(tmp["winPerMonth"] / 10000 * 100, 2)
+        else:
+            tmp["winPerMonth"] = 0
+            tmp["winPctPerMonth"] = 0
         result.append(tmp)
     return result
 
