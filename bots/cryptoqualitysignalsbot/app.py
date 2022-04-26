@@ -4,9 +4,6 @@ from db import CryptoQualitySignal, session
 from datetime import datetime, timedelta
 from tradinghandler.trading import TradingInteractor
 
-res = requests.get("https://api.cryptoqualitysignals.com/v1/getSignal/?api_key=%s&interval=5" % environ["CQS_API_KEY"]).json()
-print(res)
-
 # direction will be SHORT or LONG (?)
 # type is one of:
 # SHORT TERM
@@ -15,34 +12,40 @@ print(res)
 # MID TERM
 # LONG TERM
 
-# first save everything to database
-for signal in res["signals"]:
-    # int cast
-    for col in ["id", "risk_level"]:
-        signal[col] = int(signal[col])
-    # float cast
-    for col in ["buy_start", "buy_end", "target1", "target2", "target3", "stop_loss", "ask"]:
-        signal[col] = float(signal[col])
-    # datetime cast
-    signal["timestamp"] = datetime.strptime(signal["timestamp"], "%Y-%m-%d %H:%M:%S")
-    signal["created_at"] = datetime.utcnow()
-    # signal["executed"] = False
-    # make sanity check of target1, target2 , target3
-    if not (signal["target1"] < signal["target2"] < signal["target3"]):
-        if signal["target1"] == 0:
-            signal["target1"] = signal["buy_end"]
-        # else set target2 to target1
-        signal["target2"] = signal["target1"]
-        if signal["target3"] < signal["target2"]:
-            signal["target3"] = signal["target2"]
-    signalObj = CryptoQualitySignal(**signal)
-    try:
-        session.add(signalObj)
-        session.commit()
-    except Exception as e:
-        # print(e)
-        session.rollback()
-        # probably bc it is already in there and we do not want to overwrite
+BUY_WAITFORMID = bool(environ.get("BUY_WAITFORMID", False))
+QUERY_API = bool(environ.get("QUERY_API", True))
+
+if QUERY_API:
+    res = requests.get("https://api.cryptoqualitysignals.com/v1/getSignal/?api_key=%s&interval=5" % environ["CQS_API_KEY"]).json()
+    print(res)
+    # first save everything to database
+    for signal in res["signals"]:
+        # int cast
+        for col in ["id", "risk_level"]:
+            signal[col] = int(signal[col])
+        # float cast
+        for col in ["buy_start", "buy_end", "target1", "target2", "target3", "stop_loss", "ask"]:
+            signal[col] = float(signal[col])
+        # datetime cast
+        signal["timestamp"] = datetime.strptime(signal["timestamp"], "%Y-%m-%d %H:%M:%S")
+        signal["created_at"] = datetime.utcnow()
+        # signal["executed"] = False
+        # make sanity check of target1, target2 , target3
+        if not (signal["target1"] < signal["target2"] < signal["target3"]):
+            if signal["target1"] == 0:
+                signal["target1"] = signal["buy_end"]
+            # else set target2 to target1
+            signal["target2"] = signal["target1"]
+            if signal["target3"] < signal["target2"]:
+                signal["target3"] = signal["target2"]
+        signalObj = CryptoQualitySignal(**signal)
+        try:
+            session.add(signalObj)
+            session.commit()
+        except Exception as e:
+            # print(e)
+            session.rollback()
+            # probably bc it is already in there and we do not want to overwrite
 
 
 ti = TradingInteractor(environ["BOTNAME"])
@@ -77,7 +80,16 @@ if usdt > 10:
             # if symbol not in portfolio:
             #     # if we have a price
             # check if we are in range yet
-            if signal.buy_start <= price <= signal.buy_end:
+            BUYSIG = False
+            if not BUY_WAITFORMID:
+                if signal.buy_start <= price <= signal.buy_end:
+                    BUYSIG = True
+            else:
+                # new method where we want price to be higher than the mid between buy_start and buy_end
+                midpoint = (signal.buy_start + signal.buy_end) / 2
+                if price > midpoint:
+                    BUYSIG = True
+            if BUYSIG:
                 # the moment to buy!
                 try:
                     print("buy - buy zone reached: %s" % symbol)

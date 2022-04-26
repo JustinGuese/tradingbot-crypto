@@ -17,6 +17,8 @@ spec:
             env:
               - name: BOTNAME
                 value: "SIG-CQS-LONG"
+              - name: QUERY_API
+                value: "true"
               - name: PSQL_URL
                 valueFrom:
                   secretKeyRef:

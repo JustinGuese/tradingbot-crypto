@@ -375,13 +375,23 @@ def getPriceHistoric(symbol: str, lookbackdays: int = 1, db: Session = Depends(g
     return hist.to_dict()
 
 ## trade functioms
-
+PRICE_NOTFOUNDLIST = []
 def getCurrentPrice(symbol):
+    if symbol in PRICE_NOTFOUNDLIST:
+        raise ValueError("cannot get price for symbol " + symbol + ". do not query again")
     if "USDT" in symbol:
-        return float(binanceapi.get_avg_price(symbol=symbol)["price"])
+        try:
+            return float(binanceapi.get_avg_price(symbol=symbol)["price"])
+        except:
+            PRICE_NOTFOUNDLIST.append(symbol)
+            raise
     elif "USD" in symbol:
         symbol = symbol.replace("USD", "")
-        return float(yf.download(symbol, period="1d", interval="1m")["Close"][-1])
+        try:
+            return float(yf.download(symbol, period="1d", interval="1m")["Close"][-1])
+        except:
+            PRICE_NOTFOUNDLIST.append(symbol)
+            raise
     else:
         raise ValueError("getCurrentPrice: symbol " + symbol + " not supported")
 
