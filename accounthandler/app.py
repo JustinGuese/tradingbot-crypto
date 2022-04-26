@@ -106,7 +106,21 @@ def resetAccount(name: str, db: Session = Depends(get_db)):
 
 @app.get("/accounts/ranked/")
 def getRankedAccounts(db: Session = Depends(get_db)):
-    return db.query(Account.name, Account.netWorth, Account.lastTrade).order_by(Account.netWorth.desc()).all()
+    res =  db.query(Account.name, Account.netWorth, Account.lastTrade, Account.createdAt).order_by(Account.netWorth.desc()).all()
+    # res = res.__dict__
+    result = []
+    for r in res:
+        tmp = dict()
+        tmp["name"] = r.name
+        tmp["netWorth"] = r.netWorth
+        tmp["lastTrade"] = r.lastTrade
+        tmp["createdAt"] = r.createdAt
+        # calculate win per month
+        holdingMonths = (datetime.utcnow() - tmp["createdAt"]).days / 30
+        tmp["winPerMonth"] = round((tmp["netWorth"] - 10000) / holdingMonths, 2)
+        tmp["winPctPerMonth"] = round(tmp["winPerMonth"] / 10000 * 100, 2)
+        result.append(tmp)
+    return result
 
 @app.get("/accounts/{name}")
 def get_account(name: str, db: Session = Depends(get_db)):

@@ -5,6 +5,9 @@ services:
     build: ./accounthandler
     ports:
       - "8000:8000"
-    # env_file:
-    #   - .env
+    environment:
+      - SYMBOLS="BTC,ETH"
+      - STOCKS="AAPL,TSLA"
+    env_file:
+      - .env
     # restart: on-failuredoc
