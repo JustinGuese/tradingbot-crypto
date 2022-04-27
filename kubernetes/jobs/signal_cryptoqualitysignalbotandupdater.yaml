@@ -19,6 +19,10 @@ spec:
                 value: "SIG-CQS-LONG"
               - name: QUERY_API
                 value: "true"
+              - name: BUY_WAITFORMID
+                value: "true"
+              - name: SIGNAL_LOOKBACK
+                value: "1" # days
               - name: PSQL_URL
                 valueFrom:
                   secretKeyRef:

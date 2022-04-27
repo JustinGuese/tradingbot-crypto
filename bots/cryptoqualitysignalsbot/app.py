@@ -14,6 +14,7 @@ from tradinghandler.trading import TradingInteractor
 
 BUY_WAITFORMID = bool(environ.get("BUY_WAITFORMID", False))
 QUERY_API = bool(environ.get("QUERY_API", True))
+SIGNAL_LOOKBACK = int(environ.get("SIGNAL_LOOKBACK", 7))
 
 if QUERY_API:
     res = requests.get("https://api.cryptoqualitysignals.com/v1/getSignal/?api_key=%s&interval=5" % environ["CQS_API_KEY"]).json()
@@ -55,7 +56,7 @@ usdt = portfolio["USDT"]
 # then trade based on signals
 # get current signals from database until seven days back, which are not executed yet and which are direction LONG
 if usdt > 10:
-    longSignals = session.query(CryptoQualitySignal).filter(CryptoQualitySignal.executed == False, CryptoQualitySignal.direction == "LONG", CryptoQualitySignal.timestamp > datetime.utcnow() - timedelta(days=7)).all()
+    longSignals = session.query(CryptoQualitySignal).filter(CryptoQualitySignal.executed == False, CryptoQualitySignal.direction == "LONG", CryptoQualitySignal.timestamp > datetime.utcnow() - timedelta(days=SIGNAL_LOOKBACK)).all()
     for signal in longSignals:
         # get the current price of that coin
         currency = signal.currency
