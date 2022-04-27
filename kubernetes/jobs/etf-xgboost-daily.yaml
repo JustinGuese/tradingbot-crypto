@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: trading
+  labels:
+    name: etf-xgboost-daily-pv-claim
+  name: etf-xgboost-daily-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etf-xgboost-daily
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "1 22 * * 1-5"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: etf-xgboost-daily
+            image: guestros/tradingbot-etf-xgboost:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: "etf-xgboost-daily"
+              - name: SYMBOL
+                value: "^IXIC" # NASDAQ
+              - name: TIMEFRAME
+                value: "1d"
+            volumeMounts:
+              - name: etf-xgboost-daily-volume
+                mountPath: /persistent/
+          restartPolicy: OnFailure
+          volumes:
+            - name: etf-xgboost-daily-volume
+              persistentVolumeClaim:
+                claimName: etf-xgboost-daily-pv-claim

@@ -34,3 +34,6 @@ docker push guestros/tradingbot-coingecko-gainers:latest
 # cryptoqualitysignalsbot and updater
 docker build -t guestros/tradingbot-cryptoqualitysignalsbot-and-updater:latest ./cryptoqualitysignalsbot
 docker push guestros/tradingbot-cryptoqualitysignalsbot-and-updater:latest
+# etf xgboost
+docker build -t guestros/tradingbot-etf-xgboost:latest ./etf-xgboost
+docker push guestros/tradingbot-etf-xgboost:latest
