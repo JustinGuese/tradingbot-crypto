@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: live-tradingbot-coingeckotrendhourly-daily-morning
+  namespace: trading
+spec:
+  concurrencyPolicy: "Forbid"
+  schedule: "2 4 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: live-tradingbot-coingeckotrendhourly-daily-morning
+            image: guestros/tradingbot-coingeckotrending:latest
+            imagePullPolicy: Always
+            env:
+              - name: BOTNAME
+                value: LIVEtestnetportfolio
+          restartPolicy: OnFailure

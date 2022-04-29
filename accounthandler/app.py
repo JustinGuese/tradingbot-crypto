@@ -38,6 +38,8 @@ def get_db():
 app = FastAPI()
 
 binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
+binanceLIVEapi = Client(environ["BINANCE_KEY_LIVE"], environ["BINANCE_SECRET_LIVE"])
+binanceLIVEapi.API_URL = 'https://testnet.binance.vision/api'
 # environ["SYMBOLS"] = "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
 SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
@@ -45,6 +47,12 @@ SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
 STOCKS = environ["STOCKS"].split(",")
 STOCKS = [symb + "USD" for symb in STOCKS]
 
+# getting all tradeable symbols
+ex = binanceLIVEapi.get_exchange_info()
+ALL_BINANCE_TRADEABLE = [s["symbol"] for s in ex["symbols"]]
+# ['BNBBUSD', 'BTCBUSD', 'ETHBUSD', 'LTCBUSD', 'TRXBUSD', 'XRPBUSD', 'BNBUSDT', 
+# 'BTCUSDT', 'ETHUSDT', 'LTCUSDT', 'TRXUSDT', 'XRPUSDT', 'BNBBTC', 'ETHBTC', 'LTCBTC', 
+# 'TRXBTC', 'XRPBTC', 'LTCBNB', 'TRXBNB', 'XRPBNB']
 
 # @app.on_event("startup")
 # def startup_event():
@@ -61,19 +69,40 @@ STOCKS = [symb + "USD" for symb in STOCKS]
 
 
 
+@app.get("/binance/live/portfolio")
+def binance_live_portfolio():
+    info = binanceLIVEapi.get_account()
+    portfolio = dict()
+    for pos in info['balances']:
+        # [{'asset': 'BNB', 'free': '1000.00000000', 'locked': '0.00000000'}, 
+        # {'asset': 'BTC', 'free': '1.00000000', 'locked': '0.00000000'}, 
+        # {'asset': 'BUSD', 'free': '10000.00000000', 'locked': '0.00000000'}, 
+        if pos["asset"] != "USDT":
+            symboladdition = "USDT"
+        else:
+            symboladdition = ""
+        portfolio[pos["asset"] + symboladdition] = float(pos["free"])
+        if float(pos["locked"]) > 0:
+            portfolio[pos["asset"] + symboladdition + "-locked"] = float(pos["locked"])
+    return portfolio
 
 @app.put("/accounts/{name}")
-def create_account(name: str, description: str = "", startmoney: float = 10000., db: Session = Depends(get_db)):
+def create_account(name: str, description: str = "", startmoney: float = 10000., live: bool = False, db: Session = Depends(get_db)):
     # check if account exists
     account = db.query(Account).filter(Account.name == name).first()
     if account is not None:
         raise HTTPException(status_code=409, detail="Account already exists")
     # create account
-    portfolio = {
-        "USDT": startmoney,
-    }
+    if not live:
+        portfolio = {
+            "USDT": startmoney,
+        }
+    else:
+        # take the real portfolio from binance
+        # todo: limit how much this account can spend
+        portfolio = binance_live_portfolio()
     account = Account(name=name, portfolio=portfolio, description=description, 
-        lastTrade=datetime.utcnow(), netWorth = startmoney, lastUpdateWorth = datetime.utcnow(), createdAt = datetime.utcnow())
+        lastTrade=datetime.utcnow(), netWorth = startmoney, lastUpdateWorth = datetime.utcnow(), createdAt = datetime.utcnow(), live = live, startMoney = startmoney)
     db.add(account)
     db.commit()
     return account
@@ -106,7 +135,7 @@ def resetAccount(name: str, db: Session = Depends(get_db)):
 
 @app.get("/accounts/ranked/")
 def getRankedAccounts(db: Session = Depends(get_db)):
-    res =  db.query(Account.name, Account.netWorth, Account.lastTrade, Account.createdAt).order_by(Account.netWorth.desc()).all()
+    res =  db.query(Account.name, Account.netWorth, Account.lastTrade, Account.createdAt, Account.startMoney).order_by(Account.netWorth.desc()).all()
     # res = res.__dict__
     result = []
     for r in res:
@@ -118,8 +147,8 @@ def getRankedAccounts(db: Session = Depends(get_db)):
         # calculate win per month
         holdingMonths = (datetime.utcnow() - tmp["createdAt"]).days / 30
         if holdingMonths > 0:
-            tmp["winPerMonth"] = round((tmp["netWorth"] - 10000) / holdingMonths, 2)
-            tmp["winPctPerMonth"] = round(tmp["winPerMonth"] / 10000 * 100, 2)
+            tmp["winPerMonth"] = round((tmp["netWorth"] - r.startMoney) / holdingMonths, 2)
+            tmp["winPctPerMonth"] = round(tmp["winPerMonth"] / r.startMoney * 100, 2)
         else:
             tmp["winPerMonth"] = 0
             tmp["winPctPerMonth"] = 0
@@ -200,12 +229,19 @@ def __updatePortfolioWorth(db: Session = Depends(get_db)):
     symbolPrices = dict()
     allAccounts = db.query(Account).all()
     for account in allAccounts:
+        if account.live:
+            # get real asset portfolio now
+            account.portfolio = binance_live_portfolio()
         netWorth = account.portfolio.get("USDT", 0.)
         for symbol, amount in account.portfolio.items():
             if symbol != "USDT":
                 if symbol not in symbolPrices:
+                    # take care of live -locked values
                     try:
-                        symbolPrices[symbol] = getCurrentPrice(symbol)
+                        tmpsymbol = symbol
+                        if "-locked" in symbol:
+                            tmpsymbol = symbol.replace("-locked", "")
+                        symbolPrices[symbol] = getCurrentPrice(tmpsymbol)
                     except Exception as e:
                         raise Exception("problem with: " + symbol + ": " + str(e))
                 netWorth += symbolPrices[symbol] * amount
@@ -385,6 +421,9 @@ def getCurrentPrice(symbol):
         raise ValueError("cannot get price for symbol " + symbol + ". do not query again")
     if "USDT" in symbol:
         try:
+            # stupid safeguard again
+            if symbol == "USDTUSDT" or symbol == "USDT":
+                return 1.
             return float(binanceapi.get_avg_price(symbol=symbol)["price"])
         except:
             PRICE_NOTFOUNDLIST.append(symbol)
@@ -408,6 +447,21 @@ def getCurrentPriceRoute(symbol: str):
     except Exception as e:
         raise # HTTPException(status_code=404, detail="could not get data: " + str(e))
 
+def liveBuy(account, symbol, amount):
+    # first check if this is the symbol
+    if symbol not in ALL_BINANCE_TRADEABLE:
+        # check if we have 
+        raise ValueError("symbol " + symbol + " not tradeable")
+    try:
+        print("########## LIVE BUY: account %s, symbol %s, amount %f" % (account.name, symbol, amount))
+        order = binanceLIVEapi.order_market_buy(
+            symbol=symbol,
+            quantity=amount)
+    except Exception as e:
+        raise
+    account.portfolio = binance_live_portfolio()
+    return account
+
 COMMISSION = 0.00125
 @app.put("/buy/{name}/{symbol}/{amount}")
 def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Session = Depends(get_db)):
@@ -420,15 +474,19 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     cost = currentPrice * amount * (1 + COMMISSION)
     if cost > usdt:
         raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
-    account.portfolio["USDT"] = usdt - cost
-    account.portfolio[symbol] = account.portfolio.get(symbol, 0) + amount
-    # account.portfolio = json.dumps(portfolio)
+
+    if account.live:
+        account = liveBuy(account, symbol, amount)
+    else:
+        account.portfolio["USDT"] = usdt - cost
+        account.portfolio[symbol] = account.portfolio.get(symbol, 0) + amount
+        # account.portfolio = json.dumps(portfolio)
     # finally set last trade to now
     account.lastTrade = datetime.utcnow()
     db.merge(account)
     db.commit()
     # then write it to db
-    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = True, timestamp = datetime.utcnow())
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = True, timestamp = datetime.utcnow(), real = account.live)
     db.merge(trade)
     try:
         db.commit()
@@ -437,8 +495,29 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
         pass # for now
     return account.portfolio
 
+def liveSell(account, symbol, amount):
+    if symbol not in ALL_BINANCE_TRADEABLE:
+        # check if we have 
+        raise ValueError("symbol " + symbol + " not tradeable")
+    # translate symbol 2 binance
+    # symbol = symbol.split("USDT")[0]
+    # binance behaves super strange sometimes...
+    try:
+        print("########## LIVE SELL: account %s, symbol %s, amount %f" % (account.name, symbol, amount))
+        order = binanceLIVEapi.order_market_sell(
+            symbol=symbol,
+            quantity=amount)
+    except Exception as e:
+        raise
+    account.portfolio = binance_live_portfolio()
+    return account
+
 def __sell(name, symbol, amount, amountInUSD, db):
     account = getAccount(name, db)
+    if "-locked" in symbol:
+        # warning
+        print("WARNING: selling locked symbol not possible " + symbol)
+        return account.portfolio
     # portfolio = account.portfolio
     amountSymbol = account.portfolio.get(symbol, -1)
     if amountSymbol == 0:
@@ -458,10 +537,12 @@ def __sell(name, symbol, amount, amountInUSD, db):
             amount = amount / currentPrice
         if amount > amountSymbol:
             raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
-        
-        win = amount * currentPrice * (1 - COMMISSION)
-        account.portfolio[symbol] = amountSymbol - amount
-        account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
+        if account.live:
+            account = liveSell(account, symbol, amount)
+        else:
+            win = amount * currentPrice * (1 - COMMISSION)
+            account.portfolio[symbol] = amountSymbol - amount
+            account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
     # account.portfolio = account.portfolio
     # finally set last trade to now
     account.lastTrade = datetime.utcnow()
@@ -469,7 +550,7 @@ def __sell(name, symbol, amount, amountInUSD, db):
     db.merge(account)
     db.commit()
     # then write it to db
-    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = False, timestamp = datetime.utcnow())
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = False, timestamp = datetime.utcnow(), real = account.live)
     db.merge(trade)
     try:
         db.commit()
@@ -489,7 +570,11 @@ def emergencyLiquidate(name: str, db: Session = Depends(get_db)):
     portfolio = account.portfolio
     for symbol in portfolio:
         if symbol != "USDT":
-            _ = __sell(name, symbol, -1, False, db)
+            try:
+                _ = __sell(name, symbol, -1, False, db)
+            except Exception as e:
+                print("EMERGENCY LIQUIDATE could not sell " + symbol)
+                print(e)
     return account
 
 def cnnextract(db):

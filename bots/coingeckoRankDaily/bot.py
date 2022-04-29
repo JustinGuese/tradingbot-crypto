@@ -28,7 +28,10 @@ weights = [.2, .15, .13, .12, .11, .1, .1] # ~0.9
 for position in portfolio:
     if position not in coins and position != "USDT":
         print("trying to sell: ", position)
-        ti.sell(position, -1)
+        try:
+            ti.sell(position, -1)
+        except Exception as e:
+            print("could not sell: ", position, str(e))
 # then get new volume
 ti.portfolio = None # force new download
 usdt = ti.getUSD()
@@ -42,5 +45,5 @@ for symbol in coins:
         i += 1
     except Exception as e:
         print("problem with buying %s. will skip to next" % symbol)
-
-pprint(portf)
+portfolio = ti.getPortfolio()
+pprint(portfolio)

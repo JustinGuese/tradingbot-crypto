@@ -36,6 +36,16 @@ spec:
                 secretKeyRef:
                   name: binance-creds
                   key: BINANCE_SECRET
+            - name: BINANCE_KEY_LIVE
+              valueFrom:
+                secretKeyRef:
+                  name: binance-creds
+                  key: BINANCE_KEY_LIVE
+            - name: BINANCE_SECRET_LIVE
+              valueFrom:
+                secretKeyRef:
+                  name: binance-creds
+                  key: BINANCE_SECRET_LIVE
             - name: PSQL_URL
               valueFrom:
                 secretKeyRef:

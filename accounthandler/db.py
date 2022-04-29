@@ -31,6 +31,8 @@ class Account(Base):
     netWorth = Column(Float)
     lastUpdateWorth = Column(DateTime)
     createdAt = Column(DateTime, default = datetime.utcnow)
+    live = Column(Boolean, default = False)
+    startMoney = Column(Float, default = 10000)
 
 class Trade(Base):
     __tablename__ = "trades"
@@ -41,6 +43,7 @@ class Trade(Base):
     price= Column(Float)
     buy= Column(Boolean)
     timestamp= Column(DateTime)
+    real = Column(Boolean, default = False)
 
 class Error(Base):
     __tablename__ = "errors"
