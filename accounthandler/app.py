@@ -428,7 +428,7 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     db.merge(account)
     db.commit()
     # then write it to db
-    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = True)
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = True, timestamp = datetime.utcnow())
     db.merge(trade)
     try:
         db.commit()
@@ -469,7 +469,7 @@ def __sell(name, symbol, amount, amountInUSD, db):
     db.merge(account)
     db.commit()
     # then write it to db
-    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = False)
+    trade = Trade(accountname = name, symbol=symbol, amount=amount, price=currentPrice, buy = False, timestamp = datetime.utcnow())
     db.merge(trade)
     try:
         db.commit()
