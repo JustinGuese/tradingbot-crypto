@@ -145,7 +145,7 @@ if len(portfolio) > 1:
                         else:
                             reason = "unknown :x"
                         print("sell - %s reached: %s" % (reason,symbol))
-                        ti.sell(symbol, usdt / 4)
+                        ti.sell(symbol, -1)
                         signal.inExecution = False
                         session.merge(signal)
                     except Exception as e:
