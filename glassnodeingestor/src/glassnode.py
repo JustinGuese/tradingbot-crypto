@@ -30,20 +30,21 @@ class GlassnodeClient:
     p['api_key'] = self._api_key
 
     r = requests.get(url, params=p,timeout = 2)
+    if r.status_code != 200:
+      raise ValueError("Error: %s" % r.text)
 
     try:
-       r.raise_for_status()
+        result = json.loads(r.text)
+        # t shows timestamp, often v for result, but other values as well
+        if len(result) > 0:
+          if result[0].get("t") is not None:
+            # if we have a timestamp in response
+            result = pd.DataFrame(result)
+            result = result.set_index("t")
+          else:
+            raise ValueError("! no timestamp in response")
+        return result
     except Exception as e:
-        print(e)
-        print(r.text)
-
-    try:
-        df = pd.DataFrame(json.loads(r.text))
-        df = df.set_index('t')
-        df.index = pd.to_datetime(df.index, unit='s')
-        df = df.sort_index()
-        s = df.v
-        s.name = '_'.join(url.split('/')[-2:])
-        return s
-    except Exception as e:
+        # check for non of t are in the columns
+        print("problem with response: ", r.text)
         raise
