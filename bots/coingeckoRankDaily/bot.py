@@ -26,24 +26,26 @@ coins = [c["item"]["symbol"] + "USDT" for c in coins]
 weights = [.2, .15, .13, .12, .11, .1, .1] # ~0.9
 # first sell if not in there anymore
 for position in portfolio:
-    if position not in coins and position != "USDT":
-        print("trying to sell: ", position)
-        try:
-            ti.sell(position, -1)
-        except Exception as e:
-            print("could not sell: ", position, str(e))
+    if portfolio.get(position, 0.) > 0:
+        if position not in coins and position != "USDT":
+            print("trying to sell: ", position)
+            try:
+                ti.sell(position, -1)
+            except Exception as e:
+                print("could not sell: ", position, str(e))
 # then get new volume
 ti.portfolio = None # force new download
 usdt = ti.getUSD()
 print("i have %.2f $ to spend" % usdt)
 nrPurchases = 0 # max 10
 i = 0
-for symbol in coins:
-    print("trying to buy: ", symbol)
-    try:
-        portf = ti.buy(symbol, weights[i] * usdt)
-        i += 1
-    except Exception as e:
-        print("problem with buying %s. will skip to next" % symbol)
+if usdt > 10:
+    for symbol in coins:
+        print("trying to buy: ", symbol)
+        try:
+            portf = ti.buy(symbol, weights[i] * usdt)
+            i += 1
+        except Exception as e:
+            print("problem with buying %s. will skip to next" % symbol)
 portfolio = ti.getPortfolio()
 pprint(portfolio)

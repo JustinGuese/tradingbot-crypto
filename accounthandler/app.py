@@ -39,7 +39,7 @@ app = FastAPI()
 
 binanceapi = Client(environ["BINANCE_KEY"], environ["BINANCE_SECRET"])
 binanceLIVEapi = Client(environ["BINANCE_KEY_LIVE"], environ["BINANCE_SECRET_LIVE"])
-binanceLIVEapi.API_URL = 'https://testnet.binance.vision/api'
+# binanceLIVEapi.API_URL = 'https://testnet.binance.vision/api'
 # environ["SYMBOLS"] = "BTC,ETH,MATIC,AVAX,XRP,BNB,LINK,ADA"
 SYMBOLS = environ["SYMBOLS"].split(",")
 SYMBOLS = [symb + "USDT" for symb in SYMBOLS]
@@ -153,7 +153,9 @@ def getRankedAccounts(db: Session = Depends(get_db)):
             tmp["winPerMonth"] = 0
             tmp["winPctPerMonth"] = 0
         result.append(tmp)
-    return result
+    result = pd.DataFrame(result)
+    result = result.sort_values(by=["winPerMonth"], ascending=False)
+    return result.to_dict(orient="records")
 
 @app.get("/accounts/{name}")
 def get_account(name: str, db: Session = Depends(get_db)):
@@ -162,6 +164,8 @@ def get_account(name: str, db: Session = Depends(get_db)):
 @app.get("/portfolio/{name}", response_model = Dict[str, float])
 def get_portfolio(name: str, db: Session = Depends(get_db)):
     account = getAccount(name, db)
+    if account.live == True:
+        account.portfolio = binance_live_portfolio()
     return account.portfolio
 
 @app.get("/symbolcheck/{symbol}")
@@ -457,6 +461,7 @@ def liveBuy(account, symbol, amount):
         order = binanceLIVEapi.order_market_buy(
             symbol=symbol,
             quantity=amount)
+        print("! order: ", str(order))
     except Exception as e:
         raise
     account.portfolio = binance_live_portfolio()
@@ -475,7 +480,7 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     if cost > usdt:
         raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
 
-    if account.live:
+    if account.live == True:
         account = liveBuy(account, symbol, amount)
     else:
         account.portfolio["USDT"] = usdt - cost
@@ -507,6 +512,7 @@ def liveSell(account, symbol, amount):
         order = binanceLIVEapi.order_market_sell(
             symbol=symbol,
             quantity=amount)
+        print("! order: ", str(order))
     except Exception as e:
         raise
     account.portfolio = binance_live_portfolio()
