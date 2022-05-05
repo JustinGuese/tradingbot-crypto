@@ -54,8 +54,18 @@ MINMAXLOTSIZE = dict()
 for symbol in ex["symbols"]:
     if "MARKET" in symbol["orderTypes"]:
         ALL_BINANCE_TRADEABLE.append(symbol["symbol"])
-        # # then set minimum and maximum order size
-        # MINMAXLOTSIZE[symbol["symbol"]] = [symbol["filters"][0]["minQty"], symbol["filters"][0]["maxQty"]]
+        # then set minimum and maximum order size
+        # get minimum and maximum order size
+        minimum = -1
+        maximum = -1
+        for filter in symbol["filters"]:
+            if filter["filterType"] == "LOT_SIZE":
+                minimum = float(filter["minQty"])
+                maximum = float(filter["maxQty"])
+                stepsize = float(filter["stepSize"])
+            if filter["filterType"] == "MIN_NOTIONAL":
+                mindollar = float(filter["minNotional"])
+        MINMAXLOTSIZE[symbol["symbol"]] = {"minimum" : minimum, "maximum" : maximum, "stepsize" : stepsize, "mindollar" : mindollar}
 
 # ['BNBBUSD', 'BTCBUSD', 'ETHBUSD', 'LTCBUSD', 'TRXBUSD', 'XRPBUSD', 'BNBUSDT', 
 # 'BTCUSDT', 'ETHUSDT', 'LTCUSDT', 'TRXUSDT', 'XRPUSDT', 'BNBBTC', 'ETHBTC', 'LTCBTC', 
@@ -218,7 +228,7 @@ def getHistoricPrices(symbol, interval = "60m", lookback = "2 hour ago UTC"):
     hist_df["id"] = hist_df.apply(createHistoricPriceId, axis=1)
     return hist_df
 
-def savePrice2DB(df, db: Session = Depends(get_db)):
+def savePrice2DB(df, db):
     # write only those to DB that are not already in there
     bulk = []
     for i in range(len(df)):
@@ -469,7 +479,7 @@ def liveBuy(account, symbol, amount):
         print("########## LIVE BUY: account %s, symbol %s, amount %f" % (account.name, symbol, amount))
         order = binanceLIVEapi.order_market_buy(
             symbol=symbol,
-            quantity=amount)
+            quantity=round(amount,3))
         print("! order: ", str(order))
     except Exception as e:
         raise
@@ -485,11 +495,21 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     currentPrice = getCurrentPrice(symbol)
     if amountInUSD:
         amount = amount / currentPrice
+    # need to apply stepsize fix, fkn binance
+    stepsize = MINMAXLOTSIZE[symbol]["stepsize"]
+    remainder = amount % stepsize
+    amount -= remainder
+
     cost = currentPrice * amount * (1 + COMMISSION)
     if cost > usdt:
         raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
-    elif cost < 10:
-        raise HTTPException(status_code=400, detail="Minimum amount is 10$")
+    elif cost < MINMAXLOTSIZE[symbol]["mindollar"]:
+        raise HTTPException(status_code=400, detail="binance Minimum dollar amount is %.2f$. you want: %.2f$" % (MINMAXLOTSIZE[symbol]["mindollar"], cost))
+    elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
+        raise HTTPException(status_code=400, detail="Binance lotsize: Amount too large. requires: %.2f max, you want %.2f$" % (amount, usdt))
+        # TODO: split into multiple orders
+    elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
+        raise HTTPException(status_code=400, detail="Binance lotsize: Amount too small. requires: %.4f min, you want %.4f" % (amount, usdt))
     if account.live == True:
         account = liveBuy(account, symbol, amount)
     else:
@@ -523,7 +543,8 @@ def liveSell(account, symbol, amount):
         print("########## LIVE SELL: account %s, symbol %s, amount %f" % (account.name, symbol, amount))
         order = binanceLIVEapi.order_market_sell(
             symbol=symbol,
-            quantity=amount)
+            # round bc we have a problem with max precision
+            quantity=round(amount,4))
         print("! order: ", str(order))
     except Exception as e:
         raise
@@ -552,8 +573,18 @@ def __sell(name, symbol, amount, amountInUSD, db):
             amount = amountSymbol
         elif amountInUSD:
             amount = amount / currentPrice
+        ## apply binance stepsize fix
+        stepsize = MINMAXLOTSIZE[symbol]["stepsize"]
+        remainder = amount % stepsize
+        amount -= remainder
+
         if amount > amountSymbol:
             raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
+        elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
+            raise HTTPException(status_code=400, detail="Binance lotsize: Amount too large. requires: %.2f max, you want %.2f$" % (amount, usdt))
+            # TODO: split into multiple orders
+        elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
+            raise HTTPException(status_code=400, detail="Binance lotsize: Amount too small. requires: %.4f min, you want %.4f" % (amount, usdt))
         if account.live:
             account = liveSell(account, symbol, amount)
         else:

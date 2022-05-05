@@ -47,5 +47,6 @@ if usdt > 10:
             i += 1
         except Exception as e:
             print("problem with buying %s. will skip to next" % symbol)
+            print(e)
 portfolio = ti.getPortfolio()
 pprint(portfolio)
