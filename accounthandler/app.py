@@ -49,7 +49,14 @@ STOCKS = [symb + "USD" for symb in STOCKS]
 
 # getting all tradeable symbols
 ex = binanceLIVEapi.get_exchange_info()
-ALL_BINANCE_TRADEABLE = [s["symbol"] for s in ex["symbols"]]
+ALL_BINANCE_TRADEABLE = []
+MINMAXLOTSIZE = dict()
+for symbol in ex["symbols"]:
+    if "MARKET" in symbol["orderTypes"]:
+        ALL_BINANCE_TRADEABLE.append(symbol["symbol"])
+        # # then set minimum and maximum order size
+        # MINMAXLOTSIZE[symbol["symbol"]] = [symbol["filters"][0]["minQty"], symbol["filters"][0]["maxQty"]]
+
 # ['BNBBUSD', 'BTCBUSD', 'ETHBUSD', 'LTCBUSD', 'TRXBUSD', 'XRPBUSD', 'BNBUSDT', 
 # 'BTCUSDT', 'ETHUSDT', 'LTCUSDT', 'TRXUSDT', 'XRPUSDT', 'BNBBTC', 'ETHBTC', 'LTCBTC', 
 # 'TRXBTC', 'XRPBTC', 'LTCBNB', 'TRXBNB', 'XRPBNB']
@@ -81,9 +88,11 @@ def binance_live_portfolio():
             symboladdition = "USDT"
         else:
             symboladdition = ""
-        portfolio[pos["asset"] + symboladdition] = float(pos["free"])
-        if float(pos["locked"]) > 0:
-            portfolio[pos["asset"] + symboladdition + "-locked"] = float(pos["locked"])
+        howmuch = float(pos["free"])
+        if howmuch > 0.:
+            portfolio[pos["asset"] + symboladdition] = howmuch
+            if float(pos["locked"]) > 0:
+                portfolio[pos["asset"] + symboladdition + "-locked"] = float(pos["locked"])
     return portfolio
 
 @app.put("/accounts/{name}")
@@ -479,7 +488,8 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     cost = currentPrice * amount * (1 + COMMISSION)
     if cost > usdt:
         raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
-
+    elif cost < 10:
+        raise HTTPException(status_code=400, detail="Minimum amount is 10$")
     if account.live == True:
         account = liveBuy(account, symbol, amount)
     else:
@@ -501,6 +511,8 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     return account.portfolio
 
 def liveSell(account, symbol, amount):
+    if amount == -1:
+        raise ValueError("LIVESELL amount must be the correct holding amount. is -1")
     if symbol not in ALL_BINANCE_TRADEABLE:
         # check if we have 
         raise ValueError("symbol " + symbol + " not tradeable")
@@ -522,8 +534,7 @@ def __sell(name, symbol, amount, amountInUSD, db):
     account = getAccount(name, db)
     if "-locked" in symbol:
         # warning
-        print("WARNING: selling locked symbol not possible " + symbol)
-        return account.portfolio
+        raise HTTPException("Error: selling locked symbol not possible " + symbol)
     # portfolio = account.portfolio
     amountSymbol = account.portfolio.get(symbol, -1)
     if amountSymbol == 0:
