@@ -149,6 +149,7 @@ def resetAccount(name: str, db: Session = Depends(get_db)):
     account.netWorth = 10000.
     account.lastTrade = datetime.utcnow()
     account.lastUpdateWorth = datetime.utcnow()
+    account.createdAt = datetime.utcnow()
     db.commit()
     return account
 
