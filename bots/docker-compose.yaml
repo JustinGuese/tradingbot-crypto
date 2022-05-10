@@ -59,3 +59,15 @@ services:
   randomforestTrader:
     image: guestros/tradingbot-randomforesttrader:latest
     build: ./randomforesthourly
+
+  coingeckogainersbot:
+    image: guestros/tradingbot-coingecko-gainers:latest
+    build: ./coingecko-gainersbot
+
+  cryptoqualitysignalsbot:
+    image: guestros/tradingbot-cryptoqualitysignalsbot-and-updater:latest
+    build: ./cryptoqualitysignalsbot
+
+  etfxgboost:
+    image: guestros/tradingbot-etf-xgboost:latest
+    build: ./etf-xgboost
