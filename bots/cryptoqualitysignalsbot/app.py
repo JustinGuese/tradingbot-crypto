@@ -56,7 +56,8 @@ usdt = portfolio["USDT"]
 # then trade based on signals
 # get current signals from database until seven days back, which are not executed yet and which are direction LONG
 if usdt > 10:
-    longSignals = session.query(CryptoQualitySignal).filter(CryptoQualitySignal.executed == False, CryptoQualitySignal.direction == "LONG", CryptoQualitySignal.timestamp > datetime.utcnow() - timedelta(days=SIGNAL_LOOKBACK)).all()
+    longSignals = session.query(CryptoQualitySignal).filter(CryptoQualitySignal.executed == False, CryptoQualitySignal.direction == "LONG", CryptoQualitySignal.timestamp > datetime.utcnow() - timedelta(days=SIGNAL_LOOKBACK),
+        (CryptoQualitySignal.exchange == "binance" or CryptoQualitySignal.exchange == "binance_futures") ).all()
     for signal in longSignals:
         # get the current price of that coin
         currency = signal.currency
@@ -143,13 +144,13 @@ if len(portfolio) > 1:
                         elif signal.stop_loss < signal.target3:
                             reason = "target2 :)) "
                         else:
-                            reason = "unknown :x"
+                            reason = "never reached target 1 :(("
                         print("sell - %s reached: %s" % (reason,symbol))
                         ti.sell(symbol, -1)
                         signal.inExecution = False
                         session.merge(signal)
                     except Exception as e:
-                        print("could not sell: %s" % symbol)
+                        print("could not sell: %s. error: %s" % (symbol, str(e)))
                 # then check if we crossed the target1 already and if so, mark it in db
                 elif price >= signal.target1:
                     # set the new stop_loss to target1
@@ -168,4 +169,4 @@ if len(portfolio) > 1:
                         signal.inExecution = False
                         session.merge(signal)
                     except Exception as e:
-                        print("could not sell: %s" % symbol)
+                        print("could not sell: %s. error: %s" % (symbol, str(e)))

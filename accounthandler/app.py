@@ -492,7 +492,7 @@ COMMISSION = 0.00125
 def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Session = Depends(get_db)):
     account = getAccount(name, db)
     # portfolio = account.portfolio
-    usdt = account.portfolio["USDT"]
+    usdt = account.portfolio.get("USDT", 0.)
     currentPrice = getCurrentPrice(symbol)
     if amountInUSD:
         amount = amount / currentPrice
@@ -503,14 +503,14 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
 
     cost = currentPrice * amount * (1 + COMMISSION)
     if cost > usdt:
-        raise HTTPException(status_code=400, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
+        raise HTTPException(status_code=512, detail="Not enough USDT. requires: %.2f$, you have %.2f$" % (cost, usdt))
     elif cost < MINMAXLOTSIZE[symbol]["mindollar"]:
-        raise HTTPException(status_code=400, detail="binance Minimum dollar amount is %.2f$. you want: %.2f$" % (MINMAXLOTSIZE[symbol]["mindollar"], cost))
+        raise HTTPException(status_code=513, detail="binance Minimum dollar amount is %.2f$. you want: %.2f$" % (MINMAXLOTSIZE[symbol]["mindollar"], cost))
     elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
-        raise HTTPException(status_code=400, detail="Binance lotsize: Amount too large. requires: %.2f max, you want %.2f$" % (amount, usdt))
+        raise HTTPException(status_code=514, detail="Binance lotsize: Amount too large. requires: %.2f max, you want %.2f$" % (amount, usdt))
         # TODO: split into multiple orders
     elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
-        raise HTTPException(status_code=400, detail="Binance lotsize: Amount too small. requires: %.4f min, you want %.4f" % (amount, usdt))
+        raise HTTPException(status_code=515, detail="Binance lotsize: Amount too small. requires: %.4f min, you want %.4f" % (amount, usdt))
     if account.live == True:
         account = liveBuy(account, symbol, amount)
     else:
@@ -580,12 +580,12 @@ def __sell(name, symbol, amount, amountInUSD, db):
         amount -= remainder
 
         if amount > amountSymbol:
-            raise HTTPException(status_code=400, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
+            raise HTTPException(status_code=512, detail="Not enough %s. requires: %.4f, you have %.4f" % (symbol, amount, amountSymbol))
         elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
-            raise HTTPException(status_code=400, detail="Binance lotsize: Amount too large. requires: %.2f max, you want %.2f$" % (amount, usdt))
+            raise HTTPException(status_code=513, detail="Binance lotsize: Amount too large. requires max %.2f, you want %.2f$" % (MINMAXLOTSIZE[symbol]["maximum"], amount))
             # TODO: split into multiple orders
         elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
-            raise HTTPException(status_code=400, detail="Binance lotsize: Amount too small. requires: %.4f min, you want %.4f" % (amount, usdt))
+            raise HTTPException(status_code=514, detail="Binance lotsize: Amount too small. requires min %.2f, you want %.4f" % (MINMAXLOTSIZE[symbol]["minimum"], amount))
         if account.live:
             account = liveSell(account, symbol, amount)
         else:
