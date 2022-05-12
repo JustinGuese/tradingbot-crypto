@@ -131,6 +131,24 @@ class TASummary(Base):
     buyCnt = Column(Integer)
     neutralCnt = Column(Integer)
     sellCnt = Column(Integer)
+
+class ErrorLive(Base):
+    __tablename__ = "errors_live"
+    id = Column(Integer, primary_key=True)
+    botname = Column(String)
+    symbol = Column(String)
+    timestamp = Column(DateTime)
+    errormessage = Column(String)
+    amount = Column(Float)
+    buy = Column(Boolean)
+    binance_minnotional = Column(Float)
+    binance_maxnotional = Column(Float)
+    binance_stepsize = Column(Float)
+
+
+
+
+
 # pydantic models
 
     # id = Column(Integer, primary_key=True, index=True)

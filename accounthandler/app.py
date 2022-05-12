@@ -3,7 +3,7 @@ from db import SessionLocal, engine, Base, \
     AccountPD, TradePD, ErrorPD, PriceHistory, \
     Account, Trade, Error, PriceHistory, ApeRank, CoinGeckoTrending, \
         PortfolioTracker, FearGreedIndex, BinanceRecentTrade, TASummary, \
-        StockData
+        StockData, ErrorLive
 from sqlalchemy.orm import Session
 from binance import Client
 from typing import List, Dict
@@ -500,20 +500,40 @@ def buy(name: str, symbol: str, amount: float, amountInUSD: bool = True, db: Ses
     stepsize = MINMAXLOTSIZE[symbol]["stepsize"]
     remainder = amount % stepsize
     amount -= remainder
+    if amount <= 0:
+        raise HTTPException(status_code=515, detail="amount must be bigger than min_notional according to binance: " + str(MINMAXLOTSIZE[symbol]["minimum"]))
 
     cost = currentPrice * amount * (1 + COMMISSION)
-    if cost > usdt:
-        raise HTTPException(status_code=512, detail="Not enough USDT. requires: %f$, you have %f$" % (cost, usdt))
-    elif cost < MINMAXLOTSIZE[symbol]["mindollar"]:
-        raise HTTPException(status_code=513, detail="binance Minimum dollar amount is %f$. you want: %f$" % (MINMAXLOTSIZE[symbol]["mindollar"], cost))
-    elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
-        raise HTTPException(status_code=514, detail="Binance lotsize: Amount too large. requires: %f max, you want %f$" % (amount, usdt))
-        # TODO: split into multiple orders
-    elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
-        raise HTTPException(status_code=515, detail="Binance lotsize: Amount too small. requires: %f min, you want %f" % (amount, usdt))
+
+    # no checks for live account, just go for it
     if account.live == True:
-        account = liveBuy(account, symbol, amount)
+        try:
+            account = liveBuy(account, symbol, amount)
+        except Exception as e:
+            elb = ErrorLive(
+                botname=account.name, 
+                symbol=symbol, 
+                timestamp = datetime.utcnow(),
+                errormessage = str(e),
+                binance_minnotional = MINMAXLOTSIZE[symbol]["minimum"],
+                binance_maxnotional = MINMAXLOTSIZE[symbol]["maximum"],
+                binance_stepsize = MINMAXLOTSIZE[symbol]["stepsize"],
+                amount = amount,
+                buy = True)
+            db.merge(elb)
+            db.commit()
+            raise
     else:
+        if cost > usdt:
+            raise HTTPException(status_code=512, detail="Not enough USDT. requires: %f$, you have %f$" % (cost, usdt))
+        elif cost < MINMAXLOTSIZE[symbol]["mindollar"]:
+            raise HTTPException(status_code=513, detail="binance Minimum dollar amount is %f$. you want: %f$" % (MINMAXLOTSIZE[symbol]["mindollar"], cost))
+        elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
+            raise HTTPException(status_code=514, detail="Binance lotsize: Amount too large. requires: %f max, you want %f$" % (amount, usdt))
+            # TODO: split into multiple orders
+        elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
+            raise HTTPException(status_code=515, detail="Binance lotsize: Amount too small. requires: %f min, you want %f" % (amount, usdt))
+
         account.portfolio["USDT"] = usdt - cost
         account.portfolio[symbol] = account.portfolio.get(symbol, 0) + amount
         # account.portfolio = json.dumps(portfolio)
@@ -578,17 +598,36 @@ def __sell(name, symbol, amount, amountInUSD, db):
         stepsize = MINMAXLOTSIZE[symbol]["stepsize"]
         remainder = amount % stepsize
         amount -= remainder
+        if amount <= 0:
+            raise HTTPException(status_code=515, detail="amount must be bigger than min_notional according to binance: " + str(MINMAXLOTSIZE[symbol]["minimum"]))
 
-        if amount > amountSymbol:
-            raise HTTPException(status_code=512, detail="Not enough %s. requires: %f, you have %f" % (symbol, amount, amountSymbol))
-        elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
-            raise HTTPException(status_code=513, detail="Binance lotsize: Amount too large. requires max %f, you want %f$" % (MINMAXLOTSIZE[symbol]["maximum"], amount))
-            # TODO: split into multiple orders
-        elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
-            raise HTTPException(status_code=514, detail="Binance lotsize: Amount too small. requires min %f, you want %f" % (MINMAXLOTSIZE[symbol]["minimum"], amount))
-        if account.live:
-            account = liveSell(account, symbol, amount)
+        # no checks for livesell, just go for it
+        if account.live:  
+            try:
+                account = liveSell(account, symbol, amount)
+            except Exception as e:
+                elb = ErrorLive(
+                    botname=account.name, 
+                    symbol=symbol, 
+                    timestamp = datetime.utcnow(),
+                    errormessage = str(e),
+                    binance_minnotional = MINMAXLOTSIZE[symbol]["minimum"],
+                    binance_maxnotional = MINMAXLOTSIZE[symbol]["maximum"],
+                    binance_stepsize = MINMAXLOTSIZE[symbol]["stepsize"],
+                    amount = amount,
+                    buy = False)
+                db.merge(elb)
+                db.commit()
+                raise
         else:
+            if amount > amountSymbol:
+                raise HTTPException(status_code=512, detail="Not enough %s. requires: %f, you have %f" % (symbol, amount, amountSymbol))
+            elif amount > MINMAXLOTSIZE[symbol]["maximum"]:
+                raise HTTPException(status_code=513, detail="Binance lotsize: Amount too large. requires max %f, you want %f$" % (MINMAXLOTSIZE[symbol]["maximum"], amount))
+                # TODO: split into multiple orders
+            elif amount < MINMAXLOTSIZE[symbol]["minimum"]:
+                raise HTTPException(status_code=514, detail="Binance lotsize: Amount too small. requires min %f, you want %f" % (MINMAXLOTSIZE[symbol]["minimum"], amount))
+
             win = amount * currentPrice * (1 - COMMISSION)
             account.portfolio[symbol] = amountSymbol - amount
             account.portfolio["USDT"] = account.portfolio.get("USDT", 0) + win
